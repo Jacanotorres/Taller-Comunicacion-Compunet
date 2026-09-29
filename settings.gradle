@@ -1,0 +1,3 @@
+rootProject.name = 'chat-ice'
+
+include 'common', 'server', 'client'

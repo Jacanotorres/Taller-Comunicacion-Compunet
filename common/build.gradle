@@ -1,0 +1,37 @@
+apply plugin: 'java-library'
+apply plugin: 'com.zeroc.gradle.ice-builder.slice'
+
+// Ubica la instalación de Ice (necesaria para slice2java), en este orden:
+//   1. -PiceHome=<ruta>   2. variable de entorno ICE_HOME   3. slice2java en el PATH
+def detectIceHome() {
+    def explicit = findProperty('iceHome') ?: System.getenv('ICE_HOME')
+    if (explicit) {
+        return explicit
+    }
+    def isWindows = System.getProperty('os.name').toLowerCase().contains('win')
+    def exe = isWindows ? 'slice2java.exe' : 'slice2java'
+    for (dir in (System.getenv('PATH') ?: '').split(File.pathSeparator)) {
+        def candidate = new File(dir, exe)
+        if (candidate.canExecute()) {
+            // <iceHome>/bin/slice2java -> <iceHome> (resuelve symlinks, ej. Homebrew)
+            return candidate.canonicalFile.parentFile.parent
+        }
+    }
+    return null
+}
+
+slice {
+    def home = detectIceHome()
+    if (home) {
+        iceHome = home
+    }
+    java {
+        srcDir = 'src/main/slice'
+        include = [file('src/main/slice')]
+    }
+}
+
+dependencies {
+    // "api" expone Ice a server y client sin redeclararlo
+    api "com.zeroc:ice:${iceVersion}"
+}

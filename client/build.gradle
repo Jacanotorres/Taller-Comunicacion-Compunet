@@ -1,0 +1,24 @@
+apply plugin: 'application'
+
+dependencies {
+    implementation project(':common')
+}
+
+application {
+    mainClass = 'co.edu.icesi.chat.client.ChatClient'
+}
+
+run {
+    workingDir = rootProject.projectDir
+    // La CLI necesita leer del teclado a través de Gradle
+    standardInput = System.in
+
+    def cliArgs = ['--Ice.Config=config/client.config']
+    // Permite apuntar a otra máquina: ./gradlew runClient -Phost=192.168.1.20 -Pport=10000
+    if (project.hasProperty('host') || project.hasProperty('port')) {
+        def host = project.findProperty('host') ?: 'localhost'
+        def port = project.findProperty('port') ?: '10000'
+        cliArgs << "--ChatService.Proxy=ChatService:tcp -h ${host} -p ${port}".toString()
+    }
+    args = cliArgs
+}

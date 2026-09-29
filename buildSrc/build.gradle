@@ -1,0 +1,8 @@
+plugins {
+    id 'java'
+}
+
+dependencies {
+    // Groovy que trae Gradle (incluye groovy-xml con groovy.xml.XmlSlurper)
+    implementation localGroovy()
+}

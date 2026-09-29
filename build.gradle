@@ -1,0 +1,37 @@
+plugins {
+    id 'com.zeroc.gradle.ice-builder.slice' version '1.5.2' apply false
+}
+
+ext {
+    iceVersion = '3.7.11'
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    group = 'co.edu.icesi.chat'
+    version = '0.1.0'
+
+    repositories {
+        mavenCentral()
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        // Bytecode Java 17 para que corra en cualquier JDK >= 17 del laboratorio
+        options.release = 17
+        options.encoding = 'UTF-8'
+    }
+}
+
+// Tareas de conveniencia desde la raíz: ./gradlew runServer / ./gradlew runClient
+tasks.register('runServer') {
+    group = 'application'
+    description = 'Inicia el servidor de chat ZeroC Ice.'
+    dependsOn ':server:run'
+}
+
+tasks.register('runClient') {
+    group = 'application'
+    description = 'Inicia un cliente de chat (CLI). Opcional: -Phost=<ip> -Pport=<puerto>'
+    dependsOn ':client:run'
+}

@@ -20,7 +20,7 @@ public class ClientCallbackI implements ClientCallback {
         this.console = console;
     }
 
-    // --- Presencia (Etapa 2) ---
+    // --- Presencia ---
 
     @Override
     public void userConnected(String nickname, Current current) {
@@ -32,7 +32,7 @@ public class ClientCallbackI implements ClientCallback {
         console.event(Console.yellow("* " + nickname + " se desconectó"));
     }
 
-    // --- Mensajería (Etapa 2) ---
+    // --- Mensajería ---
 
     @Override
     public void privateMessage(ChatMessage msg, Current current) {
@@ -42,6 +42,16 @@ public class ClientCallbackI implements ClientCallback {
     @Override
     public void roomMessage(ChatMessage msg, Current current) {
         console.event(Console.cyan("[#" + msg.room + "] " + msg.sender) + ": " + msg.text);
+    }
+
+    @Override
+    public void roomMemberJoined(String room, String nickname, Current current) {
+        console.event(Console.yellow("* " + nickname + " entró a #" + room));
+    }
+
+    @Override
+    public void roomMemberLeft(String room, String nickname, Current current) {
+        console.event(Console.yellow("* " + nickname + " salió de #" + room));
     }
 
     // --- Archivos (Etapa 3) ---

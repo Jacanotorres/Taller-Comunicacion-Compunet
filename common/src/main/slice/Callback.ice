@@ -17,6 +17,10 @@ module chat
         void privateMessage(ChatMessage msg);
         void roomMessage(ChatMessage msg);
 
+        // --- Salas: avisos a los miembros cuando alguien entra o sale ---
+        void roomMemberJoined(string room, string nickname);
+        void roomMemberLeft(string room, string nickname);
+
         // --- Archivos: sender = remitente, room vacío si es privado ---
         void fileChunk(string sender, string room, FileChunk chunk);
 

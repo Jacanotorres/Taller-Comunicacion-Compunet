@@ -22,7 +22,8 @@ public class ChatServer {
             Runtime.getRuntime().addShutdownHook(new Thread(communicator::shutdown));
 
             ObjectAdapter adapter = communicator.createObjectAdapter(ADAPTER_NAME);
-            adapter.add(new ChatServiceI(adapter), Util.stringToIdentity(SERVICE_IDENTITY));
+            ChatHub hub = new ChatHub(adapter);
+            adapter.add(new ChatServiceI(hub), Util.stringToIdentity(SERVICE_IDENTITY));
             adapter.activate();
 
             Log.info("Servidor de chat escuchando en: "

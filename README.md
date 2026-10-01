@@ -7,6 +7,8 @@ Plataforma distribuida de comunicación en tiempo real (tipo Discord/Slack):
 - **ZeroC Ice (TCP):** sesión, presencia, chat privado y grupal, transferencia de archivos y señalización de llamadas.
 - **UDP (`DatagramSocket`):** transmisión de voz en llamadas 1 a 1 y conferencias grupales.
 
+> **¿Vas a trabajar en el proyecto?** Lee primero [GUIA_EQUIPO.md](GUIA_EQUIPO.md): qué está hecho, qué falta y cómo continuar (también sirve de contexto para asistentes de IA).
+
 ## Integrantes
 
 | Nombre | Código |

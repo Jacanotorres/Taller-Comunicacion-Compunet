@@ -56,12 +56,25 @@ public class Console {
         out.println(message);
     }
 
+    /** Eco de algo que el propio usuario envió (hilo de la CLI), con la hora como los eventos. */
+    public synchronized void echo(String message) {
+        out.println(GRAY + "[" + LocalTime.now().format(TIME) + "] " + RESET + message);
+    }
+
     /** Evento que llega por callback (hilo de Ice): no debe romper el prompt. */
     public synchronized void event(String message) {
         out.print(CLEAR_LINE);
         out.println(GRAY + "[" + LocalTime.now().format(TIME) + "] " + RESET + message);
         out.print(prompt);
         out.flush();
+    }
+
+    public static String red(String text) {
+        return RED + text + RESET;
+    }
+
+    public static String gray(String text) {
+        return GRAY + text + RESET;
     }
 
     public static String cyan(String text) {

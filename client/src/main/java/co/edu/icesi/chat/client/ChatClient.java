@@ -15,9 +15,10 @@ import com.zeroc.Ice.Util;
  *
  * 1. Conecta con el ChatService del servidor (proxy en config/client.config).
  * 2. Crea un adaptador de objetos SIN endpoints y registra el servant de callback.
- * 3. Asocia ese adaptador a la conexión ya abierta con el servidor (conexión
- *    bidireccional): el servidor invoca los callbacks por la misma conexión TCP,
- *    así el cliente no necesita abrir puertos ni ser alcanzable desde afuera.
+ * 3. Al iniciar sesión, ese adaptador se asocia a la conexión ya abierta con el
+ *    servidor (conexión bidireccional, ver ClientContext.bindConnection): el
+ *    servidor invoca los callbacks por la misma conexión TCP, así el cliente no
+ *    necesita abrir puertos ni ser alcanzable desde afuera.
  * 4. Arranca la CLI en el hilo principal.
  */
 public class ChatClient {
@@ -36,13 +37,13 @@ public class ChatClient {
                 return;
             }
 
+            // Adaptador sin endpoints: solo recibe invocaciones por conexiones ya abiertas.
             ObjectAdapter callbackAdapter = communicator.createObjectAdapter("");
             ClientCallbackPrx callback = ClientCallbackPrx.uncheckedCast(
                     callbackAdapter.addWithUUID(new ClientCallbackI(console)));
             callbackAdapter.activate();
-            service.ice_getConnection().setAdapter(callbackAdapter);
 
-            ClientContext context = new ClientContext(communicator, service, callback);
+            ClientContext context = new ClientContext(communicator, service, callback, callbackAdapter);
             new CommandLoop(context, console).run();
         }
     }

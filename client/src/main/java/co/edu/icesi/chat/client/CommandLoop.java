@@ -31,6 +31,7 @@ public class CommandLoop {
     private final ClientContext context;
     private final Console console;
     private final Map<String, Command> commands = new LinkedHashMap<>();
+    private Action plainTextAction;
     private volatile boolean running = true;
 
     public CommandLoop(ClientContext context, Console console) {
@@ -41,15 +42,20 @@ public class CommandLoop {
 
     private void registerCommands() {
         register("/help", "/help", "Muestra esta ayuda", args -> printHelp());
-        register("/quit", "/quit", "Cierra el cliente", args -> running = false);
-        // Etapa 2: /login, /logout, /users, /msg, /create, /rooms, /join, /leave, /members, /room
+        new ChatCommands(context, console).registerIn(this);
         // Etapa 3: /sendfile
         // Etapa 4: /call, /accept, /reject, /hangup
         // Etapa 5: /voice, /leavevoice, /mute, /unmute
+        register("/quit", "/quit", "Cierra el cliente", args -> running = false);
     }
 
-    private void register(String name, String usage, String description, Action action) {
+    void register(String name, String usage, String description, Action action) {
         commands.put(name, new Command(usage, description, action));
+    }
+
+    /** Acción para el texto que no empieza por '/' (mensaje a la sala activa). */
+    void onPlainText(Action action) {
+        this.plainTextAction = action;
     }
 
     public void run() {
@@ -72,6 +78,7 @@ public class CommandLoop {
             }
             execute(line.strip());
         }
+        context.shutdown();
         console.info("Hasta luego.");
     }
 
@@ -79,23 +86,26 @@ public class CommandLoop {
         if (line.isEmpty()) {
             return;
         }
-        if (!line.startsWith("/")) {
-            console.error("Los comandos empiezan con '/'. Escriba /help.");
-            return;
-        }
 
-        int space = line.indexOf(' ');
-        String name = (space < 0 ? line : line.substring(0, space)).toLowerCase();
-        String args = space < 0 ? "" : line.substring(space + 1).strip();
-
-        Command command = commands.get(name);
-        if (command == null) {
-            console.error("Comando desconocido: " + name + ". Escriba /help.");
-            return;
+        Action action;
+        String args;
+        if (line.startsWith("/")) {
+            int space = line.indexOf(' ');
+            String name = (space < 0 ? line : line.substring(0, space)).toLowerCase();
+            Command command = commands.get(name);
+            if (command == null) {
+                console.error("Comando desconocido: " + name + ". Escriba /help.");
+                return;
+            }
+            action = command.action();
+            args = space < 0 ? "" : line.substring(space + 1).strip();
+        } else {
+            action = plainTextAction;
+            args = line;
         }
 
         try {
-            command.action().run(args);
+            action.run(args);
         } catch (ChatException e) {
             // Excepciones Slice de la aplicación (usuario no existe, sala no existe, ...)
             console.error(e.reason);
@@ -112,5 +122,6 @@ public class CommandLoop {
         for (Command command : commands.values()) {
             console.plain(String.format("  %-28s %s", command.usage(), command.description()));
         }
+        console.plain("  Texto sin '/' se envía a la sala activa (la que muestra el prompt).");
     }
 }

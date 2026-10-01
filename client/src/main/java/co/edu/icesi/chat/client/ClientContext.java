@@ -4,6 +4,9 @@ import co.edu.icesi.chat.ChatServicePrx;
 import co.edu.icesi.chat.ClientCallbackPrx;
 import co.edu.icesi.chat.SessionPrx;
 import com.zeroc.Ice.Communicator;
+import com.zeroc.Ice.Connection;
+import com.zeroc.Ice.LocalException;
+import com.zeroc.Ice.ObjectAdapter;
 
 /**
  * Estado del cliente compartido entre la CLI y los callbacks.
@@ -15,14 +18,19 @@ public class ClientContext {
     private final Communicator communicator;
     private final ChatServicePrx service;
     private final ClientCallbackPrx callback;
+    private final ObjectAdapter callbackAdapter;
 
     private volatile SessionPrx session;
     private volatile String nickname;
+    private volatile String activeRoom;
+    private volatile boolean closing;
 
-    public ClientContext(Communicator communicator, ChatServicePrx service, ClientCallbackPrx callback) {
+    public ClientContext(Communicator communicator, ChatServicePrx service, ClientCallbackPrx callback,
+            ObjectAdapter callbackAdapter) {
         this.communicator = communicator;
         this.service = service;
         this.callback = callback;
+        this.callbackAdapter = callbackAdapter;
     }
 
     public Communicator communicator() {
@@ -35,6 +43,26 @@ public class ClientContext {
 
     public ClientCallbackPrx callback() {
         return callback;
+    }
+
+    /**
+     * Prepara la conexión con el servidor para recibir callbacks (bidireccional).
+     *
+     * Se llama antes de cada login porque, si la conexión anterior se perdió, Ice
+     * abre una nueva y hay que volver a asociarle el adaptador de callbacks.
+     *
+     * @param onLost se ejecuta (en un hilo de Ice) si la conexión se cae con sesión activa
+     */
+    public Connection bindConnection(Runnable onLost) {
+        Connection connection = service.ice_getConnection();
+        connection.setAdapter(callbackAdapter);
+        connection.setCloseCallback(closed -> {
+            if (!closing && session != null) {
+                endSession();
+                onLost.run();
+            }
+        });
+        return connection;
     }
 
     public SessionPrx session() {
@@ -57,5 +85,29 @@ public class ClientContext {
     public void endSession() {
         this.session = null;
         this.nickname = null;
+        this.activeRoom = null;
+    }
+
+    /** Sala a la que se envía el texto escrito sin comando; null si no hay. */
+    public String activeRoom() {
+        return activeRoom;
+    }
+
+    public void setActiveRoom(String activeRoom) {
+        this.activeRoom = activeRoom;
+    }
+
+    /** Cierre ordenado al salir del cliente: avisa al servidor para que libere la sesión. */
+    public void shutdown() {
+        closing = true;
+        SessionPrx current = session;
+        if (current != null) {
+            try {
+                current.logout();
+            } catch (LocalException e) {
+                // el servidor ya no está; no hay nada que limpiar
+            }
+            endSession();
+        }
     }
 }

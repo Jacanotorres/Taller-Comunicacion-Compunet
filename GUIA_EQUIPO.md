@@ -6,7 +6,7 @@ Explica qué está hecho, cómo funciona, qué falta y las reglas para seguir tr
 > **Si eres un asistente de IA:** lee este archivo completo antes de proponer o escribir código,
 > y respeta la sección [Instrucciones para asistentes de IA](#9-instrucciones-para-asistentes-de-ia).
 
-Última actualización: 2026-10-01 · Estado: **Etapas 1 y 2 terminadas** (de 6).
+Última actualización: 2026-10-03 · Estado: **Etapas 1, 2 y 3 terminadas** (de 6).
 
 ---
 
@@ -34,14 +34,14 @@ Taller Evaluativo Unidad 2 de Computación en Internet I (Icesi, 2026-2): una pl
 |---|---|---|---|
 | 1 | Proyecto Gradle, contratos Slice, arranque de servidor y cliente | — | ✅ Hecha |
 | 2 | Sesión, presencia, chat privado, salas | RF-01, RF-02, RF-03 | ✅ Hecha |
-| 3 | Transferencia de archivos por chunks | RF-04 | ⏳ Pendiente |
+| 3 | Transferencia de archivos por chunks | RF-04 | ✅ Hecha |
 | 4 | Llamadas de voz 1 a 1 por UDP | RF-05 | ⏳ Pendiente |
 | 5 | Conferencias de voz en salas + robustez | RF-06 | ⏳ Pendiente |
 | 6 | README final, cuestionario, bitácora de IA | Entrega | ⏳ Pendiente |
 
-Las etapas **3 y 4 son independientes** entre sí: dos personas pueden trabajarlas al mismo tiempo. La 5 depende de la 4.
+La **etapa 4** no depende de nada pendiente; la 5 depende de la 4.
 
-Peso en la nota de lo que falta: archivos 0.9 + voz 1.2 + parte de concurrencia/documentación/sustentación 0.6 = más de la mitad de la nota.
+Peso en la nota de lo que falta: voz 1.2 + parte de concurrencia/documentación/sustentación 0.6.
 
 ## 3. Cómo ponerlo a andar
 
@@ -50,9 +50,9 @@ Peso en la nota de lo que falta: archivos 0.9 + voz 1.2 + parte de concurrencia/
 - **JDK 17 o superior** (probado con JDK 25).
 - **ZeroC Ice 3.7** — solo se necesita el compilador `slice2java` en el `PATH`:
   - macOS: `brew tap zeroc-ice/tap && brew install zeroc-ice/tap/ice@3.7` (si Homebrew pide confianza: `brew trust --formula zeroc-ice/tap/ice@3.7`)
-  - Windows: instalador MSI de Ice 3.7 desde https://zeroc.com/downloads/ice/3.7 y agregar su carpeta `bin` al `PATH`
+  - Windows: instalador MSI de Ice 3.7 desde https://zeroc.com/ice/downloads/3.7/java (sección *Windows Installer* → *Download for Windows*) y agregar su carpeta `bin` al `PATH`
   - Linux: paquete `zeroc-ice-compilers` del repositorio de ZeroC
-  - Si el build no lo encuentra: variable de entorno `ICE_HOME` o `./gradlew build -PiceHome=<ruta>`
+  - Si el build no lo encuentra: variable de entorno `ICE_HOME` o `./gradlew build -PiceHome=<ruta>`. En Windows, por ejemplo: `.\gradlew.bat build -PiceHome="C:\Program Files\ZeroC\Ice-3.7.11"`
 - Gradle **no** hay que instalarlo: se usa el wrapper (`./gradlew`, o `gradlew.bat` en Windows).
 
 ### Compilar y ejecutar
@@ -75,7 +75,7 @@ client/build/install/client/bin/client --Ice.Config=config/client.config
 
 ### Comandos del cliente que ya existen
 
-`/login <nick>`, `/logout`, `/users`, `/msg <usuario> <texto>`, `/create <sala>`, `/rooms`, `/join <sala>`, `/leave <sala>`, `/members <sala>`, `/room <sala> [texto]`, `/help`, `/quit`. El texto sin `/` se envía a la sala activa (la que muestra el prompt, ej. `ana #redes>`).
+`/login <nick>`, `/logout`, `/users`, `/msg <usuario> <texto>`, `/create <sala>`, `/rooms`, `/join <sala>`, `/leave <sala>`, `/members <sala>`, `/room <sala> [texto]`, `/sendfile <usuario|#sala> <ruta>`, `/help`, `/quit`. El texto sin `/` se envía a la sala activa (la que muestra el prompt, ej. `ana #redes>`).
 
 ## 4. Arquitectura
 
@@ -115,7 +115,13 @@ client/build/install/client/bin/client --Ice.Config=config/client.config
 | `Callback.ice` | Interfaz `ClientCallback`: la implementa el **cliente** |
 | `Service.ice` | Interfaces `ChatService` y `Session`: las implementa el **servidor** |
 
-Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferencias. Para las etapas 3 a 5 normalmente no hay que tocarlos; si hace falta, avisar al equipo porque afecta a servidor y cliente.
+Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferencias. Para las etapas 4 y 5 normalmente no hay que tocarlos; si hace falta, avisar al equipo porque afecta a servidor y cliente.
+
+### `common/src/main/java/co/edu/icesi/chat/` — reglas compartidas (escritas a mano, no generadas)
+
+| Clase | Responsabilidad |
+|---|---|
+| `FileTransferLimits` | Tamaño de chunk (64 KB), tamaño máximo de archivo (256 MB) y `check(chunk)`, que valida un fragmento. Lo usan servidor y cliente |
 
 ### `server/src/main/java/co/edu/icesi/chat/server/`
 
@@ -123,7 +129,7 @@ Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferenci
 |---|---|
 | `ChatServer` | `main`: crea el communicator, el adaptador `ChatAdapter` y publica `ChatService` |
 | `ChatServiceI` | Servant de `ChatService`; delega el login en `ChatHub` |
-| `SessionI` | Servant de `Session`, uno por usuario. **Aquí están los métodos pendientes** (lanzan `pending(...)`) |
+| `SessionI` | Servant de `Session`, uno por usuario. **Aquí están los métodos pendientes de las etapas 4 y 5** (lanzan `pending(...)`) |
 | `ChatHub` | Núcleo: login, `disconnect`, `notify` y `broadcast` |
 | `UserRegistry` | Usuarios conectados (thread-safe) |
 | `RoomManager`, `Room` | Salas y sus miembros (thread-safe) |
@@ -137,42 +143,32 @@ Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferenci
 | `ChatClient` | `main`: conecta, crea el adaptador de callbacks, arranca la CLI |
 | `CommandLoop` | Lee el teclado (hilo principal), despacha comandos y traduce excepciones a mensajes |
 | `ChatCommands` | Comandos de sesión, mensajes y salas. **Modelo a seguir para los comandos nuevos** |
-| `ClientCallbackI` | Servant de `ClientCallback`. Corre en hilos de Ice. **Tiene `TODO` para las etapas 3 y 4** |
+| `ClientCallbackI` | Servant de `ClientCallback`. Corre en hilos de Ice. **Tiene `TODO` para la etapa 4** |
 | `ClientContext` | Estado del cliente: proxies, sesión, nickname, sala activa |
 | `Console` | Salida sincronizada: `event()` para lo que llega por callback, `echo()`/`info()`/`error()` para la CLI |
+| `FileCommands` | Comando `/sendfile`: valida ruta, tamaño y destino |
+| `FileSender` | Lee el archivo en bloques de 64 KB y los envía en un hilo aparte (`file-sender`) |
+| `FileAssembler` | Recibe chunks y arma el archivo en `downloads/`. Todo su estado vive en un solo hilo (`file-assembler`) |
+| `FileFormat` | Tamaños legibles y SHA-256 |
 
 ### Otros
 
 - `config/server.config`, `config/client.config`: propiedades de Ice (endpoints, `Ice.MessageSizeMax`, hilos, ACM).
 - `buildSrc/`: clase puente para que el plugin de Ice funcione con Gradle 9. **No tocar** (ver sección 7).
 
-## 6. Lo que falta, etapa por etapa
+## 6. Detalle por etapa
 
-### Etapa 3 — Transferencia de archivos (RF-04) · 0.9 puntos
+### Etapa 3 — Transferencia de archivos (RF-04) · ✅ Hecha
 
-**Objetivo:** `/sendfile <usuario|#sala> <ruta>` envía cualquier archivo (png, jpg, wav, mp3, pdf, txt) y el receptor lo reconstruye sin corrupción.
+`/sendfile <usuario|#sala> <ruta>`. Decisiones tomadas:
 
-Servidor (`SessionI`):
-- Implementar `sendFileChunkToUser(to, chunk)`: buscar al destinatario (`hub.users().find(to)`) y reenviar con `hub.notify(target, cb -> cb.fileChunkAsync(me.nickname(), "", chunk))`.
-- Implementar `sendFileChunkToRoom(room, chunk)`: `hub.rooms().requireMember(room, me)` y `hub.broadcast(...)` excluyendo al emisor.
-- Validar el chunk (índice dentro de rango, tamaño de datos razonable) y lanzar `FileTransferException` si es inválido. El servidor **no** guarda el archivo: solo reenvía.
+- Chunks de **64 KB fijos** (`FileTransferLimits.CHUNK_SIZE`); todos miden eso salvo el último. Así la posición de un chunk es siempre `index * 64 KB` y se escribe bien aunque lleguen desordenados. Máximo 256 MB por archivo. Un archivo vacío viaja como un solo chunk sin datos.
+- El servidor valida cada chunk (`FileTransferLimits.check`) y solo reenvía; no guarda nada. Rechaza auto-envíos.
+- El emisor envía en un hilo aparte, de a un chunk (síncrono): la CLI no se congela y no se acumulan chunks en memoria.
+- El receptor encola los chunks y los escribe un único hilo (`file-assembler`), así los hilos de Ice no tocan disco. Escribe en `downloads/.recibiendo-*.part` y renombra solo al completar con el tamaño correcto. Nunca sobrescribe (`archivo (1).ext`) y limpia el nombre recibido para que nadie escriba fuera de `downloads/`.
+- Integridad: tamaño final igual a `totalSize`, y ambos lados imprimen el SHA-256 para comparar. No se agregó hash a `FileMeta` para no tocar los contratos.
 
-Cliente:
-- Clase nueva `FileSender`: lee el archivo en bloques de **64 KB**, arma `FileMeta` (UUID como `transferId`, nombre, tamaño total, total de chunks) y envía cada `FileChunk`.
-- Clase nueva `FileAssembler`: recibe los chunks en `ClientCallbackI.fileChunk` y escribe el archivo en la carpeta `downloads/` (ya está en `.gitignore`).
-- Clase nueva `FileCommands` con `/sendfile`, registrada en `CommandLoop.registerCommands()`.
-
-Puntos delicados:
-- **Los chunks pueden llegar desordenados** al receptor (el cliente despacha callbacks con varios hilos). Escribir cada chunk en su posición (`RandomAccessFile.seek(index * tamañoDeChunk)`) y llevar la cuenta de los recibidos, en vez de asumir orden.
-- `FileAssembler` se usa desde varios hilos de Ice: su estado debe ser thread-safe.
-- No bloquear el hilo del callback con trabajo largo.
-- No confiar en el nombre de archivo recibido: quitarle la ruta (`Paths.get(nombre).getFileName()`) para que nadie escriba fuera de `downloads/`.
-- Si ya existe un archivo con ese nombre, no sobrescribirlo (agregar un sufijo).
-- Enviar un archivo grande no debe congelar la CLI: hacerlo en un hilo aparte o con invocaciones asíncronas, con un límite de chunks en vuelo.
-- Verificar integridad: como mínimo, tamaño final igual a `totalSize`. Ideal: comparar un hash SHA-256 (habría que agregar el campo a `FileMeta`).
-- `Ice.MessageSizeMax` está en 2048 KB; un chunk de 64 KB queda muy por debajo.
-
-Criterios de aceptación: enviar un PDF o imagen de varios MB a un usuario y a una sala; el archivo recibido debe ser idéntico (`shasum` en macOS/Linux, `certutil -hashfile` en Windows); el emisor no recibe su propio archivo; quien no está en la sala no lo recibe.
+Limitaciones conocidas: "Archivo enviado" significa que el servidor recibió todo, no que el receptor terminó (el contrato no tiene confirmación). Si el emisor se cae a mitad, el receptor descarta el archivo incompleto a los 2 minutos o al salir.
 
 ### Etapa 4 — Llamadas de voz 1 a 1 (RF-05) · parte de 1.2 puntos
 
@@ -221,6 +217,7 @@ Puntos delicados: en macOS hay que dar permiso de micrófono a la terminal o al 
 | Las excepciones Slice llegan como `UnknownUserException` | Los stubs usan el paquete `co.edu.icesi` | `Ice.Package.chat=co.edu.icesi` en ambos `.config`. No quitarla |
 | `-Phost` no cambiaba el servidor | `Util.initialize` solo lee de la línea de comandos las propiedades `Ice.*` | `parseCommandLineOptions("ChatService", ...)` en `ChatClient` |
 | El servidor no detectaba un cliente congelado | Sus propios latidos contaban como actividad | Solo el cliente envía latidos (`Ice.ACM.Server.Heartbeat=0`, `Close=4`) |
+| `slice2java (\bin\slice2java.exe) not found` en Windows | No está instalado el compilador de Ice | Instalar el MSI de Ice 3.7 (página de descarga de **Java**) y compilar con `-PiceHome="C:\Program Files\ZeroC\Ice-3.7.11"` |
 
 ## 8. Reglas de trabajo del equipo
 
@@ -286,7 +283,7 @@ Implementar una operación pendiente del servidor:
 | Etapa | Responsable |
 |---|---|
 | 1 y 2 | Jacanotorres (hechas) |
-| 3 — Archivos | *por asignar* |
+| 3 — Archivos | JUANFIX1 (hecha) |
 | 4 — Llamadas 1 a 1 | *por asignar* |
 | 5 — Conferencias y robustez | *por asignar* |
 | 6 — Documentación | Todos |

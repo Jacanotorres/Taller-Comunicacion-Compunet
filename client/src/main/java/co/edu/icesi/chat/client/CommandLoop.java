@@ -43,7 +43,7 @@ public class CommandLoop {
     private void registerCommands() {
         register("/help", "/help", "Muestra esta ayuda", args -> printHelp());
         new ChatCommands(context, console).registerIn(this);
-        // Etapa 3: /sendfile
+                new FileCommands(context, console).registerIn(this);
         // Etapa 4: /call, /accept, /reject, /hangup
         // Etapa 5: /voice, /leavevoice, /mute, /unmute
         register("/quit", "/quit", "Cierra el cliente", args -> running = false);

@@ -15,9 +15,11 @@ import com.zeroc.Ice.Current;
 public class ClientCallbackI implements ClientCallback {
 
     private final Console console;
+    private final FileAssembler files;
 
-    public ClientCallbackI(Console console) {
+    public ClientCallbackI(Console console, FileAssembler files) {
         this.console = console;
+        this.files = files;
     }
 
     // --- Presencia ---
@@ -58,9 +60,9 @@ public class ClientCallbackI implements ClientCallback {
 
     @Override
     public void fileChunk(String sender, String room, FileChunk chunk, Current current) {
-        // TODO Etapa 3: entregar el chunk a un FileAssembler que reconstruya el archivo.
-        console.event("Chunk " + (chunk.index + 1) + "/" + chunk.meta.totalChunks
-                + " de '" + chunk.meta.fileName + "' recibido de " + sender);
+        
+        files.onChunk(sender, room, chunk);
+        
     }
 
     // --- Llamadas 1 a 1 (Etapa 4) ---

@@ -5,6 +5,7 @@ import co.edu.icesi.chat.CallException;
 import co.edu.icesi.chat.ChatMessage;
 import co.edu.icesi.chat.FileChunk;
 import co.edu.icesi.chat.FileTransferException;
+import co.edu.icesi.chat.FileTransferLimits;
 import co.edu.icesi.chat.InvalidNameException;
 import co.edu.icesi.chat.NotRoomMemberException;
 import co.edu.icesi.chat.RoomAlreadyExistsException;
@@ -120,6 +121,7 @@ public class SessionI implements Session {
         Log.info("MSG    " + me.nickname() + " -> #" + target.name());
     }
 
+    
     // ------------------------------------------------------------------
     // Archivos (RF-04) — Etapa 3
     // ------------------------------------------------------------------
@@ -127,13 +129,44 @@ public class SessionI implements Session {
     @Override
     public void sendFileChunkToUser(String to, FileChunk chunk, Current current)
             throws UserNotFoundException, FileTransferException {
-        throw pending("sendFileChunkToUser", 3);
+        requireValid(chunk);
+        ClientSession target = hub.users().find(to);
+        if (target == me) {
+            throw new FileTransferException("No puedes enviarte un archivo a ti mismo.");
+        }
+
+        // El servidor no guarda el archivo: solo reenvía cada fragmento al callback del
+        // destinatario, de forma asíncrona (un receptor lento no bloquea un hilo del servidor).
+        hub.notify(target, cb -> cb.fileChunkAsync(me.nickname(), "", chunk));
+        logFile(chunk, target.nickname());
     }
 
     @Override
     public void sendFileChunkToRoom(String room, FileChunk chunk, Current current)
             throws RoomNotFoundException, NotRoomMemberException, FileTransferException {
-        throw pending("sendFileChunkToRoom", 3);
+        requireValid(chunk);
+        // Aislamiento: solo un miembro puede enviar, y solo los miembros reciben.
+        Room target = hub.rooms().requireMember(room, me);
+
+        // A todos los miembros menos al emisor (no recibe su propio archivo).
+        hub.broadcast(target.members(), me, cb -> cb.fileChunkAsync(me.nickname(), target.name(), chunk));
+        logFile(chunk, "#" + target.name());
+    }
+
+    /** Rechaza fragmentos incoherentes antes de reenviarlos a nadie (ver FileTransferLimits). */
+    private static void requireValid(FileChunk chunk) throws FileTransferException {
+        String problem = FileTransferLimits.check(chunk);
+        if (problem != null) {
+            throw new FileTransferException(problem);
+        }
+    }
+
+    /** Solo registra el primer y el último fragmento, para no inundar el log. */
+    private void logFile(FileChunk chunk, String destination) {
+        if (chunk.index == 0 || chunk.index == chunk.meta.totalChunks - 1) {
+            Log.info("FILE   " + me.nickname() + " -> " + destination + " '" + chunk.meta.fileName
+                    + "' fragmento " + (chunk.index + 1) + "/" + chunk.meta.totalChunks);
+        }
     }
 
     // ------------------------------------------------------------------

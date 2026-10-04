@@ -1,5 +1,6 @@
 package co.edu.icesi.chat.client;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,12 +40,17 @@ public class ChatClient {
 
             // Adaptador sin endpoints: solo recibe invocaciones por conexiones ya abiertas.
             ObjectAdapter callbackAdapter = communicator.createObjectAdapter("");
+            FileAssembler files = new FileAssembler(Path.of("downloads"), console);
             ClientCallbackPrx callback = ClientCallbackPrx.uncheckedCast(
-                    callbackAdapter.addWithUUID(new ClientCallbackI(console)));
+                    callbackAdapter.addWithUUID(new ClientCallbackI(console, files)));
             callbackAdapter.activate();
 
             ClientContext context = new ClientContext(communicator, service, callback, callbackAdapter);
-            new CommandLoop(context, console).run();
+            try {
+                new CommandLoop(context, console).run();
+            } finally {
+                files.close(); // borra los archivos a medias antes de salir
+            }
         }
     }
 

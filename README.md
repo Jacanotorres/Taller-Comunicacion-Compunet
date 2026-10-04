@@ -13,10 +13,10 @@ Plataforma distribuida de comunicación en tiempo real (tipo Discord/Slack):
 
 | Nombre | Código |
 |---|---|
-| | |
-| | |
-| | |
-| | |
+| Juan Felipe Martinez Palacios | A00412033 |
+| Juan Andres Cano Torres | A00 |
+| Elias Saldarriaga | A00 |
+
 
 ## Requisitos
 

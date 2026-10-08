@@ -16,10 +16,12 @@ public class ClientCallbackI implements ClientCallback {
 
     private final Console console;
     private final FileAssembler files;
+    private final CallSession calls;
 
-    public ClientCallbackI(Console console, FileAssembler files) {
+    public ClientCallbackI(Console console, FileAssembler files, CallSession calls) {
         this.console = console;
         this.files = files;
+        this.calls = calls;
     }
 
     // --- Presencia ---
@@ -60,34 +62,31 @@ public class ClientCallbackI implements ClientCallback {
 
     @Override
     public void fileChunk(String sender, String room, FileChunk chunk, Current current) {
-        
+        // Solo encola: la escritura en disco la hace el hilo de FileAssembler, no este hilo de Ice.
         files.onChunk(sender, room, chunk);
-        
     }
 
     // --- Llamadas 1 a 1 (Etapa 4) ---
 
     @Override
     public void incomingCall(String caller, AudioEndpoint callerAudio, Current current) {
-        // TODO Etapa 4: guardar la llamada pendiente para /accept o /reject.
-        console.event(Console.yellow("Llamada entrante de " + caller));
+        // Solo encola: CallSession procesa el aviso en su propio hilo, no en este hilo de Ice.
+        calls.onIncomingCall(caller, callerAudio);
     }
 
     @Override
     public void callAccepted(String callee, AudioEndpoint calleeAudio, Current current) {
-        // TODO Etapa 4: iniciar envío/recepción de audio UDP hacia calleeAudio.
-        console.event(Console.yellow(callee + " aceptó la llamada"));
+        calls.onCallAccepted(callee, calleeAudio);
     }
 
     @Override
     public void callRejected(String callee, Current current) {
-        console.event(Console.yellow(callee + " rechazó la llamada"));
+        calls.onCallRejected(callee);
     }
 
     @Override
     public void callEnded(String peer, Current current) {
-        // TODO Etapa 4: detener audio y cerrar sockets UDP.
-        console.event(Console.yellow("La llamada con " + peer + " terminó"));
+        calls.onCallEnded(peer);
     }
 
     // --- Conferencias (Etapa 5) ---

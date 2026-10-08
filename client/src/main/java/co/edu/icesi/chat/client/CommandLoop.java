@@ -30,13 +30,15 @@ public class CommandLoop {
 
     private final ClientContext context;
     private final Console console;
+    private final CallSession calls;
     private final Map<String, Command> commands = new LinkedHashMap<>();
     private Action plainTextAction;
     private volatile boolean running = true;
 
-    public CommandLoop(ClientContext context, Console console) {
+    public CommandLoop(ClientContext context, Console console, CallSession calls) {
         this.context = context;
         this.console = console;
+        this.calls = calls;
         registerCommands();
     }
 
@@ -44,7 +46,7 @@ public class CommandLoop {
         register("/help", "/help", "Muestra esta ayuda", args -> printHelp());
         new ChatCommands(context, console).registerIn(this);
                 new FileCommands(context, console).registerIn(this);
-        // Etapa 4: /call, /accept, /reject, /hangup
+        new CallCommands(context, console, calls).registerIn(this);
         // Etapa 5: /voice, /leavevoice, /mute, /unmute
         register("/quit", "/quit", "Cierra el cliente", args -> running = false);
     }

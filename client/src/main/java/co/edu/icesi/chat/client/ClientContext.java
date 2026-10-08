@@ -24,6 +24,7 @@ public class ClientContext {
     private volatile String nickname;
     private volatile String activeRoom;
     private volatile boolean closing;
+    private final java.util.List<Runnable> sessionEndListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public ClientContext(Communicator communicator, ChatServicePrx service, ClientCallbackPrx callback,
             ObjectAdapter callbackAdapter) {
@@ -69,6 +70,8 @@ public class ClientContext {
         return session;
     }
 
+    
+    public void onSessionEnd(Runnable listener) { sessionEndListeners.add(listener); }
     public String nickname() {
         return nickname;
     }
@@ -86,6 +89,8 @@ public class ClientContext {
         this.session = null;
         this.nickname = null;
         this.activeRoom = null;
+        sessionEndListeners.forEach(Runnable::run);
+
     }
 
     /** Sala a la que se envía el texto escrito sin comando; null si no hay. */

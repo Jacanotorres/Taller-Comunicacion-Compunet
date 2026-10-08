@@ -28,6 +28,7 @@ public class ChatHub {
     private final ObjectAdapter adapter;
     private final UserRegistry users = new UserRegistry();
     private final RoomManager rooms = new RoomManager();
+    private final CallManager calls = new CallManager(this);
 
     public ChatHub(ObjectAdapter adapter) {
         this.adapter = adapter;
@@ -40,6 +41,11 @@ public class ChatHub {
     public RoomManager rooms() {
         return rooms;
     }
+    
+    public CallManager calls() {
+        return calls;
+    }
+
 
     // ------------------------------------------------------------------
     // Ciclo de vida de la sesión
@@ -88,7 +94,7 @@ public class ChatHub {
         for (Room room : rooms.removeFromAll(session)) {
             broadcast(room.members(), session, cb -> cb.roomMemberLeftAsync(room.name(), session.nickname()));
         }
-
+        calls.onDisconnect(session); // si estaba en una llamada, avisa al otro
         Log.info("LOGOUT " + session.nickname() + " [" + cause + "] (" + users.all().size() + " en línea)");
         broadcast(users.all(), session, cb -> cb.userDisconnectedAsync(session.nickname()));
     }

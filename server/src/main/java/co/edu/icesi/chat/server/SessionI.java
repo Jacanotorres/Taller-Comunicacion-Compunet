@@ -176,18 +176,18 @@ public class SessionI implements Session {
     @Override
     public void startCall(String to, AudioEndpoint myAudio, Current current)
             throws UserNotFoundException, CallException {
-        throw pending("startCall", 4);
+        hub.calls().start(me, to, myAudio);
     }
 
     @Override
     public void answerCall(String caller, boolean accept, AudioEndpoint myAudio, Current current)
             throws CallException {
-        throw pending("answerCall", 4);
+        hub.calls().answer(me, caller, accept, myAudio);
     }
 
     @Override
     public void hangup(Current current) throws CallException {
-        throw pending("hangup", 4);
+        hub.calls().hangup(me);
     }
 
     // ------------------------------------------------------------------

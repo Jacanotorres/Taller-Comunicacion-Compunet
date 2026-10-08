@@ -41,14 +41,17 @@ public class ChatClient {
             // Adaptador sin endpoints: solo recibe invocaciones por conexiones ya abiertas.
             ObjectAdapter callbackAdapter = communicator.createObjectAdapter("");
             FileAssembler files = new FileAssembler(Path.of("downloads"), console);
+            CallSession calls = new CallSession(console, new SystemAudio());
             ClientCallbackPrx callback = ClientCallbackPrx.uncheckedCast(
-                    callbackAdapter.addWithUUID(new ClientCallbackI(console, files)));
+                    callbackAdapter.addWithUUID(new ClientCallbackI(console, files, calls)));
             callbackAdapter.activate();
 
             ClientContext context = new ClientContext(communicator, service, callback, callbackAdapter);
+            calls.attach(context);
             try {
-                new CommandLoop(context, console).run();
+                new CommandLoop(context, console, calls).run();
             } finally {
+                calls.close(); // libera el audio si salió en plena llamada
                 files.close(); // borra los archivos a medias antes de salir
             }
         }

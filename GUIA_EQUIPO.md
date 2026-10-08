@@ -6,7 +6,7 @@ Explica qué está hecho, cómo funciona, qué falta y las reglas para seguir tr
 > **Si eres un asistente de IA:** lee este archivo completo antes de proponer o escribir código,
 > y respeta la sección [Instrucciones para asistentes de IA](#9-instrucciones-para-asistentes-de-ia).
 
-Última actualización: 2026-10-01 · Estado: **Etapas 1 y 2 terminadas** (de 6).
+Última actualización: 2026-10-08 · Estado: **Etapas 1, 2, 3 y 4 terminadas** (de 6).
 
 ---
 
@@ -34,14 +34,14 @@ Taller Evaluativo Unidad 2 de Computación en Internet I (Icesi, 2026-2): una pl
 |---|---|---|---|
 | 1 | Proyecto Gradle, contratos Slice, arranque de servidor y cliente | — | ✅ Hecha |
 | 2 | Sesión, presencia, chat privado, salas | RF-01, RF-02, RF-03 | ✅ Hecha |
-| 3 | Transferencia de archivos por chunks | RF-04 | ⏳ Pendiente |
-| 4 | Llamadas de voz 1 a 1 por UDP | RF-05 | ⏳ Pendiente |
+| 3 | Transferencia de archivos por chunks | RF-04 | ✅ Hecha |
+| 4 | Llamadas de voz 1 a 1 por UDP | RF-05 | ✅ Hecha |
 | 5 | Conferencias de voz en salas + robustez | RF-06 | ⏳ Pendiente |
 | 6 | README final, cuestionario, bitácora de IA | Entrega | ⏳ Pendiente |
 
-Las etapas **3 y 4 son independientes** entre sí: dos personas pueden trabajarlas al mismo tiempo. La 5 depende de la 4.
+La **etapa 5** ya puede empezar: reutiliza el canal de voz de la etapa 4 (`VoiceChannel`, `AudioSender`, `AudioReceiver`).
 
-Peso en la nota de lo que falta: archivos 0.9 + voz 1.2 + parte de concurrencia/documentación/sustentación 0.6 = más de la mitad de la nota.
+Peso en la nota de lo que falta: conferencias de voz (el resto de los 1.2 de voz) + concurrencia/documentación/sustentación 0.6.
 
 ## 3. Cómo ponerlo a andar
 
@@ -50,9 +50,9 @@ Peso en la nota de lo que falta: archivos 0.9 + voz 1.2 + parte de concurrencia/
 - **JDK 17 o superior** (probado con JDK 25).
 - **ZeroC Ice 3.7** — solo se necesita el compilador `slice2java` en el `PATH`:
   - macOS: `brew tap zeroc-ice/tap && brew install zeroc-ice/tap/ice@3.7` (si Homebrew pide confianza: `brew trust --formula zeroc-ice/tap/ice@3.7`)
-  - Windows: instalador MSI de Ice 3.7 desde https://zeroc.com/downloads/ice/3.7 y agregar su carpeta `bin` al `PATH`
+  - Windows: instalador MSI de Ice 3.7 desde https://zeroc.com/ice/downloads/3.7/java (sección *Windows Installer* → *Download for Windows*) y agregar su carpeta `bin` al `PATH`
   - Linux: paquete `zeroc-ice-compilers` del repositorio de ZeroC
-  - Si el build no lo encuentra: variable de entorno `ICE_HOME` o `./gradlew build -PiceHome=<ruta>`
+  - Si el build no lo encuentra: variable de entorno `ICE_HOME` o `./gradlew build -PiceHome=<ruta>`. En Windows, por ejemplo: `.\gradlew.bat build -PiceHome="C:\Program Files\ZeroC\Ice-3.7.11"`
 - Gradle **no** hay que instalarlo: se usa el wrapper (`./gradlew`, o `gradlew.bat` en Windows).
 
 ### Compilar y ejecutar
@@ -73,9 +73,16 @@ Para lanzar clientes más rápido (sin pasar por Gradle cada vez):
 client/build/install/client/bin/client --Ice.Config=config/client.config
 ```
 
+### Probar llamadas de voz
+
+- Dos clientes: `/login ana` y `/login bea`; ana escribe `/call bea`, bea escribe `/accept`; se cuelga con `/hangup`.
+- **Usar audífonos**: no hay cancelación de eco, y sin ellos el micrófono recoge el altavoz.
+- Lo ideal es probar en **dos máquinas** (`./gradlew runClient -Phost=<IP del servidor>`). Con los dos clientes en el mismo PC, Windows puede negarse a abrir el micrófono dos veces ("No se pudo abrir el micrófono").
+- Windows pregunta si se permite a Java usar la red: aceptar en **redes privadas**; si no, el audio UDP no llega. En macOS hay que dar permiso de micrófono a la terminal o al IDE.
+
 ### Comandos del cliente que ya existen
 
-`/login <nick>`, `/logout`, `/users`, `/msg <usuario> <texto>`, `/create <sala>`, `/rooms`, `/join <sala>`, `/leave <sala>`, `/members <sala>`, `/room <sala> [texto]`, `/help`, `/quit`. El texto sin `/` se envía a la sala activa (la que muestra el prompt, ej. `ana #redes>`).
+`/login <nick>`, `/logout`, `/users`, `/msg <usuario> <texto>`, `/create <sala>`, `/rooms`, `/join <sala>`, `/leave <sala>`, `/members <sala>`, `/room <sala> [texto]`, `/sendfile <usuario|#sala> <ruta>`, `/call <usuario>`, `/accept`, `/reject`, `/hangup`, `/help`, `/quit`. El texto sin `/` se envía a la sala activa (la que muestra el prompt, ej. `ana #redes>`).
 
 ## 4. Arquitectura
 
@@ -86,12 +93,13 @@ client/build/install/client/bin/client --Ice.Config=config/client.config
   │ ChatCommands     │   (Ice/TCP)│ SessionI (1 x user)│           │                  │
   │                  │            │ ChatHub            │──callback─▶│ ClientCallbackI │
   │ ClientCallbackI  │◀─callback──│  ├ UserRegistry    │  (Ice/TCP) │ Console          │
-  │ Console          │            │  └ RoomManager     │           │                  │
-  └──────────────────┘            └────────────────────┘           └──────────────────┘
+  │ Console          │            │  ├ RoomManager     │           │                  │
+  └──────────────────┘            │  └ CallManager     │           └──────────────────┘
+                                  └────────────────────┘
         una sola conexión TCP por cliente; los callbacks viajan por esa misma conexión
 
-  (Etapas 4 y 5, pendiente)   audio UDP directo A ⇄ B en llamadas 1 a 1
-                              audio UDP A → relay del servidor → demás, en conferencias
+  (Etapa 4, hecha)       audio UDP directo A ⇄ B en llamadas 1 a 1; Ice solo coordina la llamada
+  (Etapa 5, pendiente)   audio UDP A → relay del servidor → demás, en conferencias
 ```
 
 ### Decisiones ya tomadas (no cambiarlas sin hablarlo con el equipo)
@@ -99,7 +107,7 @@ client/build/install/client/bin/client --Ice.Config=config/client.config
 - **Patrón de sesión.** `ChatService` solo tiene `login(nickname, callback)`, que devuelve un proxy `Session*` propio del usuario. Todo lo demás se invoca sobre la sesión. Por eso las operaciones **no reciben el nickname del emisor**: el servidor ya lo sabe (`me` en `SessionI`).
 - **Callbacks bidireccionales.** El cliente crea un adaptador sin endpoints y lo asocia a su conexión con el servidor (`ClientContext.bindConnection`). El servidor fija el proxy de callback a esa conexión con `callback.ice_fixed(connection)` (`ChatHub.login`). El cliente no abre puertos TCP.
 - **Notificaciones asíncronas.** El servidor nunca llama a un cliente de forma síncrona: usa `ChatHub.notify(...)` / `ChatHub.broadcast(...)`, que invocan `...Async`. Así un cliente lento no bloquea un hilo del servidor.
-- **Concurrencia.** Estado compartido solo en `UserRegistry` y `RoomManager` (ambos con `ConcurrentHashMap`). Nickname único con `putIfAbsent`; altas y bajas de salas dentro de `computeIfPresent`. `SessionI` y `ChatHub` no guardan estado mutable propio.
+- **Concurrencia.** Estado compartido solo en `UserRegistry`, `RoomManager` y `CallManager`. Nickname único con `putIfAbsent`; altas y bajas de salas dentro de `computeIfPresent`; las llamadas, con un único lock corto. `SessionI` y `ChatHub` no guardan estado mutable propio.
 - **Detección de caídas.** El cliente envía latidos (ACM). Si el servidor no ve actividad en 15 s, cierra la conexión; el *close callback* (`ChatHub.connectionClosed`) llama a `ChatHub.disconnect`, que es **idempotente**. Todo recurso nuevo que se asocie a un usuario (llamadas, voz) debe liberarse en `ChatHub.disconnect`.
 - **Nombres.** Nicknames y salas: 2 a 20 caracteres, sin espacios, sin distinguir mayúsculas (`Names`). Una sala se borra al quedar vacía.
 - **Conferencias de voz:** relay centralizado en el servidor (opción *a* del taller), no malla P2P.
@@ -115,7 +123,13 @@ client/build/install/client/bin/client --Ice.Config=config/client.config
 | `Callback.ice` | Interfaz `ClientCallback`: la implementa el **cliente** |
 | `Service.ice` | Interfaces `ChatService` y `Session`: las implementa el **servidor** |
 
-Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferencias. Para las etapas 3 a 5 normalmente no hay que tocarlos; si hace falta, avisar al equipo porque afecta a servidor y cliente.
+Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferencias. Para la etapa 5 normalmente no hay que tocarlos; si hace falta, avisar al equipo porque afecta a servidor y cliente.
+
+### `common/src/main/java/co/edu/icesi/chat/` — reglas compartidas (escritas a mano, no generadas)
+
+| Clase | Responsabilidad |
+|---|---|
+| `FileTransferLimits` | Tamaño de chunk (64 KB), tamaño máximo de archivo (256 MB) y `check(chunk)`, que valida un fragmento. Lo usan servidor y cliente |
 
 ### `server/src/main/java/co/edu/icesi/chat/server/`
 
@@ -123,10 +137,11 @@ Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferenci
 |---|---|
 | `ChatServer` | `main`: crea el communicator, el adaptador `ChatAdapter` y publica `ChatService` |
 | `ChatServiceI` | Servant de `ChatService`; delega el login en `ChatHub` |
-| `SessionI` | Servant de `Session`, uno por usuario. **Aquí están los métodos pendientes** (lanzan `pending(...)`) |
-| `ChatHub` | Núcleo: login, `disconnect`, `notify` y `broadcast` |
+| `SessionI` | Servant de `Session`, uno por usuario. **Aquí están los métodos pendientes de la etapa 5** (lanzan `pending(...)`) |
+| `ChatHub` | Núcleo: login, `disconnect`, `notify` y `broadcast`. Expone `users()`, `rooms()` y `calls()` |
 | `UserRegistry` | Usuarios conectados (thread-safe) |
 | `RoomManager`, `Room` | Salas y sus miembros (thread-safe) |
+| `CallManager` | Llamadas 1 a 1: quién llama a quién (timbrando o activa) y avisos al otro lado. Thread-safe |
 | `ClientSession` | Datos inmutables de un usuario: nickname, callback, conexión |
 | `Names`, `Log` | Validación de nombres y log por consola |
 
@@ -137,70 +152,60 @@ Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferenci
 | `ChatClient` | `main`: conecta, crea el adaptador de callbacks, arranca la CLI |
 | `CommandLoop` | Lee el teclado (hilo principal), despacha comandos y traduce excepciones a mensajes |
 | `ChatCommands` | Comandos de sesión, mensajes y salas. **Modelo a seguir para los comandos nuevos** |
-| `ClientCallbackI` | Servant de `ClientCallback`. Corre en hilos de Ice. **Tiene `TODO` para las etapas 3 y 4** |
-| `ClientContext` | Estado del cliente: proxies, sesión, nickname, sala activa |
+| `ClientCallbackI` | Servant de `ClientCallback`. Corre en hilos de Ice. Delega archivos en `FileAssembler` y llamadas en `CallSession`; los avisos de voz de la etapa 5 por ahora solo se imprimen |
+| `ClientContext` | Estado del cliente: proxies, sesión, nickname, sala activa. `onSessionEnd(...)` avisa cuando la sesión termina |
 | `Console` | Salida sincronizada: `event()` para lo que llega por callback, `echo()`/`info()`/`error()` para la CLI |
+| `FileCommands` | Comando `/sendfile`: valida ruta, tamaño y destino |
+| `FileSender` | Lee el archivo en bloques de 64 KB y los envía en un hilo aparte (`file-sender`) |
+| `FileAssembler` | Recibe chunks y arma el archivo en `downloads/`. Todo su estado vive en un solo hilo (`file-assembler`) |
+| `FileFormat` | Tamaños legibles y SHA-256 |
+| `CallCommands` | Comandos `/call`, `/accept`, `/reject`, `/hangup`: validan argumentos y delegan en `CallSession` |
+| `CallSession` | Estado de la llamada (IDLE, CALLING, INCOMING, ACTIVE). Los avisos de Ice se procesan en su hilo `call-events` |
+| `VoiceChannel` | Un socket UDP y sus dos hilos (`voice-sender`, `voice-receiver`). `close()` libera todo. **Reutilizable en la etapa 5** |
+| `AudioSender`, `AudioReceiver` | Los hilos: micrófono → UDP y UDP → altavoz |
+| `AudioSpec` | Formato del audio: PCM 16 bits, mono, 16 kHz, paquetes de 20 ms (640 bytes) |
+| `AudioDevices`, `AudioSource`, `AudioSink` | Interfaces del micrófono y el altavoz, para poder probar sin hardware |
+| `SystemAudio` | Implementación real con `javax.sound.sampled` |
 
 ### Otros
 
 - `config/server.config`, `config/client.config`: propiedades de Ice (endpoints, `Ice.MessageSizeMax`, hilos, ACM).
 - `buildSrc/`: clase puente para que el plugin de Ice funcione con Gradle 9. **No tocar** (ver sección 7).
 
-## 6. Lo que falta, etapa por etapa
+## 6. Detalle por etapa
 
-### Etapa 3 — Transferencia de archivos (RF-04) · 0.9 puntos
+### Etapa 3 — Transferencia de archivos (RF-04) · ✅ Hecha
 
-**Objetivo:** `/sendfile <usuario|#sala> <ruta>` envía cualquier archivo (png, jpg, wav, mp3, pdf, txt) y el receptor lo reconstruye sin corrupción.
+`/sendfile <usuario|#sala> <ruta>`. Decisiones tomadas:
 
-Servidor (`SessionI`):
-- Implementar `sendFileChunkToUser(to, chunk)`: buscar al destinatario (`hub.users().find(to)`) y reenviar con `hub.notify(target, cb -> cb.fileChunkAsync(me.nickname(), "", chunk))`.
-- Implementar `sendFileChunkToRoom(room, chunk)`: `hub.rooms().requireMember(room, me)` y `hub.broadcast(...)` excluyendo al emisor.
-- Validar el chunk (índice dentro de rango, tamaño de datos razonable) y lanzar `FileTransferException` si es inválido. El servidor **no** guarda el archivo: solo reenvía.
+- Chunks de **64 KB fijos** (`FileTransferLimits.CHUNK_SIZE`); todos miden eso salvo el último. Así la posición de un chunk es siempre `index * 64 KB` y se escribe bien aunque lleguen desordenados. Máximo 256 MB por archivo. Un archivo vacío viaja como un solo chunk sin datos.
+- El servidor valida cada chunk (`FileTransferLimits.check`) y solo reenvía; no guarda nada. Rechaza auto-envíos.
+- El emisor envía en un hilo aparte, de a un chunk (síncrono): la CLI no se congela y no se acumulan chunks en memoria.
+- El receptor encola los chunks y los escribe un único hilo (`file-assembler`), así los hilos de Ice no tocan disco. Escribe en `downloads/.recibiendo-*.part` y renombra solo al completar con el tamaño correcto. Nunca sobrescribe (`archivo (1).ext`) y limpia el nombre recibido para que nadie escriba fuera de `downloads/`.
+- Integridad: tamaño final igual a `totalSize`, y ambos lados imprimen el SHA-256 para comparar. No se agregó hash a `FileMeta` para no tocar los contratos.
 
-Cliente:
-- Clase nueva `FileSender`: lee el archivo en bloques de **64 KB**, arma `FileMeta` (UUID como `transferId`, nombre, tamaño total, total de chunks) y envía cada `FileChunk`.
-- Clase nueva `FileAssembler`: recibe los chunks en `ClientCallbackI.fileChunk` y escribe el archivo en la carpeta `downloads/` (ya está en `.gitignore`).
-- Clase nueva `FileCommands` con `/sendfile`, registrada en `CommandLoop.registerCommands()`.
+Limitaciones conocidas: "Archivo enviado" significa que el servidor recibió todo, no que el receptor terminó (el contrato no tiene confirmación). Si el emisor se cae a mitad, el receptor descarta el archivo incompleto a los 2 minutos o al salir.
 
-Puntos delicados:
-- **Los chunks pueden llegar desordenados** al receptor (el cliente despacha callbacks con varios hilos). Escribir cada chunk en su posición (`RandomAccessFile.seek(index * tamañoDeChunk)`) y llevar la cuenta de los recibidos, en vez de asumir orden.
-- `FileAssembler` se usa desde varios hilos de Ice: su estado debe ser thread-safe.
-- No bloquear el hilo del callback con trabajo largo.
-- No confiar en el nombre de archivo recibido: quitarle la ruta (`Paths.get(nombre).getFileName()`) para que nadie escriba fuera de `downloads/`.
-- Si ya existe un archivo con ese nombre, no sobrescribirlo (agregar un sufijo).
-- Enviar un archivo grande no debe congelar la CLI: hacerlo en un hilo aparte o con invocaciones asíncronas, con un límite de chunks en vuelo.
-- Verificar integridad: como mínimo, tamaño final igual a `totalSize`. Ideal: comparar un hash SHA-256 (habría que agregar el campo a `FileMeta`).
-- `Ice.MessageSizeMax` está en 2048 KB; un chunk de 64 KB queda muy por debajo.
+### Etapa 4 — Llamadas de voz 1 a 1 (RF-05) · ✅ Hecha
 
-Criterios de aceptación: enviar un PDF o imagen de varios MB a un usuario y a una sala; el archivo recibido debe ser idéntico (`shasum` en macOS/Linux, `certutil -hashfile` en Windows); el emisor no recibe su propio archivo; quien no está en la sala no lo recibe.
+`/call <usuario>`, `/accept`, `/reject`, `/hangup`. El audio va por UDP directo entre los dos clientes; Ice solo hace la señalización. Decisiones tomadas:
 
-### Etapa 4 — Llamadas de voz 1 a 1 (RF-05) · parte de 1.2 puntos
+- **Servidor:** `CallManager` (thread-safe, un solo lock corto) guarda quién llama a quién (timbrando o activa, una llamada por usuario) y notifica `incomingCall`, `callAccepted`, `callRejected` y `callEnded`, siempre fuera del lock y de forma asíncrona. `ChatHub.disconnect` llama a `calls.onDisconnect`, así que si alguien se cae o hace `/logout`, el otro recibe `callEnded`.
+- **Endpoint UDP:** el cliente declara solo el **puerto** (abre un `DatagramSocket(0)` y lo anuncia). El servidor completa el **host** con la IP que ve en la conexión TCP y no confía en el host declarado, para que nadie pueda desviar el audio de otro hacia una máquina ajena.
+- **Audio:** PCM 16 bits, mono, 16 kHz, paquetes de 20 ms (640 bytes), sin cabecera (`AudioSpec`). Se usa el mismo socket para enviar y recibir.
+- **`VoiceChannel`:** socket UDP más los hilos `voice-sender` (micrófono → UDP) y `voice-receiver` (UDP → altavoz). `close()` es idempotente y libera hilos, socket y dispositivos. El altavoz descarta paquetes si su colchón (~160 ms) está lleno, para no acumular retraso.
+- **`CallSession`:** máquina de estados con un lock. Los avisos de Ice se encolan en su hilo `call-events`, así los callbacks no se bloquean. La llamada se cierra sola con `/logout`, una conexión caída o al salir (`ClientContext.onSessionEnd`).
+- **Sin hardware:** el micrófono y el altavoz van detrás de `AudioDevices` (real: `SystemAudio`), así se pueden hacer pruebas con dispositivos falsos.
+- Si el audio no se puede abrir al aceptar, la llamada se cuelga sola y avisa al otro.
 
-**Objetivo:** `/call <usuario>`, `/accept`, `/reject`, `/hangup`, con audio por UDP directo entre los dos clientes.
-
-Servidor:
-- Clase nueva `CallManager` (thread-safe) con el estado de las llamadas: quién llama a quién, timbrando o en curso.
-- `SessionI.startCall(to, myAudio)`: validar que ninguno esté ya en llamada (`CallException`), registrar y notificar `incomingCall` al destino.
-- `SessionI.answerCall(caller, accept, myAudio)`: notificar `callAccepted` (con el endpoint UDP del que acepta) o `callRejected`.
-- `SessionI.hangup()`: terminar la llamada y notificar `callEnded` al otro.
-- **Agregar la limpieza en `ChatHub.disconnect`**: si el usuario se cae en medio de una llamada, el otro debe recibir `callEnded`.
-- El cliente puede no conocer bien su propia IP. El servidor sí la ve: `((com.zeroc.Ice.IPConnectionInfo) current.con.getInfo()).remoteAddress`. Sirve para completar `AudioEndpoint.host`.
-
-Cliente:
-- `AudioSender`: hilo que captura del micrófono (`TargetDataLine`) y envía `DatagramPacket`.
-- `AudioReceiver`: hilo dedicado que recibe datagramas y reproduce (`SourceDataLine`).
-- `CallCommands` con los cuatro comandos; completar los `TODO` de `ClientCallbackI` (`incomingCall`, `callAccepted`, `callEnded`).
-- Formato de audio sugerido: PCM 16 bits, mono, 16 kHz, paquetes de 20 a 40 ms (640 a 1280 bytes). Paquetes pequeños dan baja latencia y caben en un datagrama sin fragmentarse.
-- Al colgar: detener los hilos, cerrar el `DatagramSocket` y liberar las líneas de audio (`stop()`, `close()`).
-
-Puntos delicados: en macOS hay que dar permiso de micrófono a la terminal o al IDE; para probar en una sola máquina usar audífonos (si no, hay eco y acople); cada cliente debe usar un puerto UDP distinto (pedir puerto `0` para que el sistema asigne uno libre).
+Limitaciones conocidas: no hay temporizador de timbre (si nadie responde, se cancela con `/hangup`); el receptor no filtra de quién viene el audio UDP; no hay cancelación de eco (usar audífonos); si ambos lados fallan al abrir el audio, un mensaje puede decir "canceló la llamada" en vez de "falló el audio" (solo cosmético).
 
 ### Etapa 5 — Conferencias de voz y robustez (RF-06) · resto de 1.2 + 0.6 puntos
 
 - Servidor: clase `AudioRelay` con un `DatagramSocket` UDP que recibe el audio de cada participante y lo reenvía a los demás de la misma sala. **No devolverle a nadie su propio audio** (eco).
 - `SessionI.joinVoice(room, myAudio)` devuelve el endpoint UDP del relay; `leaveVoice(room)` saca al participante sin cortar a los demás. Notificar `voiceParticipantJoined` / `voiceParticipantLeft`.
 - `RoomInfo.voiceActive` hoy está fijo en `false` en `RoomManager.list()`: conectarlo al estado real.
-- Cliente: `/voice <sala>`, `/leavevoice`, `/mute`, `/unmute`. Mute = dejar de enviar paquetes, sin cerrar la llamada.
+- Cliente: `/voice <sala>`, `/leavevoice`, `/mute`, `/unmute`. Reutilizar `VoiceChannel`, `AudioSender` y `AudioReceiver` de la etapa 4 (el "peer" ahora es el relay). Mute = dejar de enviar paquetes (agregar un indicador `muted` a `AudioSender`), sin cerrar la llamada. Una persona no puede estar en una llamada 1 a 1 y en una conferencia a la vez.
 - Limpieza en `ChatHub.disconnect` y al salir de la sala (`leaveRoom`).
 - Revisión final de concurrencia y manejo de errores en todo el servidor.
 - Probar con 3 o más participantes en máquinas distintas.
@@ -221,6 +226,7 @@ Puntos delicados: en macOS hay que dar permiso de micrófono a la terminal o al 
 | Las excepciones Slice llegan como `UnknownUserException` | Los stubs usan el paquete `co.edu.icesi` | `Ice.Package.chat=co.edu.icesi` en ambos `.config`. No quitarla |
 | `-Phost` no cambiaba el servidor | `Util.initialize` solo lee de la línea de comandos las propiedades `Ice.*` | `parseCommandLineOptions("ChatService", ...)` en `ChatClient` |
 | El servidor no detectaba un cliente congelado | Sus propios latidos contaban como actividad | Solo el cliente envía latidos (`Ice.ACM.Server.Heartbeat=0`, `Close=4`) |
+| `slice2java (\bin\slice2java.exe) not found` en Windows | No está instalado el compilador de Ice | Instalar el MSI de Ice 3.7 (página de descarga de **Java**) y compilar con `-PiceHome="C:\Program Files\ZeroC\Ice-3.7.11"` |
 
 ## 8. Reglas de trabajo del equipo
 
@@ -247,6 +253,7 @@ Contexto: proyecto académico en Java con ZeroC Ice 3.7 y Gradle multimódulo. L
 **Obligatorio**
 - Mantener la arquitectura existente: patrón de sesión, callbacks bidireccionales, notificaciones con `ChatHub.notify` / `broadcast`.
 - Audio solo por UDP (`java.net.DatagramSocket`). Archivos solo por Ice con `sequence<byte>` en chunks. No proponer WebSockets, HTTP, sockets TCP propios ni librerías de audio o red externas.
+- Todo el audio local pasa por `AudioDevices` (micrófono y altavoz): no abrir `javax.sound` directamente en otras clases. Así se puede probar sin hardware.
 - Todo estado nuevo en el servidor debe ser thread-safe y liberarse en `ChatHub.disconnect`.
 - No hacer invocaciones Ice síncronas desde el servidor hacia un cliente.
 - No bloquear los métodos de `ClientCallbackI` (corren en hilos de Ice): nada de leer teclado, esperas largas ni E/S pesada ahí.
@@ -277,8 +284,8 @@ Agregar un comando al cliente:
 
 Implementar una operación pendiente del servidor:
 1. Abrir `SessionI` y reemplazar el `throw pending(...)` del método.
-2. Usar `me` (quien invoca), `hub.users()`, `hub.rooms()` y `hub.notify` / `hub.broadcast`.
-3. Si se necesita estado nuevo, crear un gestor thread-safe (como `RoomManager`), exponerlo desde `ChatHub` y limpiarlo en `ChatHub.disconnect`.
+2. Usar `me` (quien invoca), `hub.users()`, `hub.rooms()`, `hub.calls()` y `hub.notify` / `hub.broadcast`.
+3. Si se necesita estado nuevo, crear un gestor thread-safe (como `RoomManager` o `CallManager`), exponerlo desde `ChatHub` y limpiarlo en `ChatHub.disconnect`.
 4. Registrar la acción con `Log.info(...)`.
 
 ## 10. Contacto y reparto
@@ -286,8 +293,8 @@ Implementar una operación pendiente del servidor:
 | Etapa | Responsable |
 |---|---|
 | 1 y 2 | Jacanotorres (hechas) |
-| 3 — Archivos | *por asignar* |
-| 4 — Llamadas 1 a 1 | *por asignar* |
+| 3 — Archivos | JUANFIX1 (hecha) |
+| 4 — Llamadas 1 a 1 | JUANFIX1 (hecha) |
 | 5 — Conferencias y robustez | *por asignar* |
 | 6 — Documentación | Todos |
 

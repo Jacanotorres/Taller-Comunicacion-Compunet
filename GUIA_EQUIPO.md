@@ -6,7 +6,7 @@ Explica qué está hecho, cómo funciona, qué falta y las reglas para seguir tr
 > **Si eres un asistente de IA:** lee este archivo completo antes de proponer o escribir código,
 > y respeta la sección [Instrucciones para asistentes de IA](#9-instrucciones-para-asistentes-de-ia).
 
-Última actualización: 2026-10-08 · Estado: **Etapas 1, 2, 3 y 4 terminadas** (de 6).
+Última actualización: 2026-10-09 · Estado: **Etapas 1 a 5 terminadas** (de 6).
 
 ---
 
@@ -36,12 +36,12 @@ Taller Evaluativo Unidad 2 de Computación en Internet I (Icesi, 2026-2): una pl
 | 2 | Sesión, presencia, chat privado, salas | RF-01, RF-02, RF-03 | ✅ Hecha |
 | 3 | Transferencia de archivos por chunks | RF-04 | ✅ Hecha |
 | 4 | Llamadas de voz 1 a 1 por UDP | RF-05 | ✅ Hecha |
-| 5 | Conferencias de voz en salas + robustez | RF-06 | ⏳ Pendiente |
+| 5 | Conferencias de voz en salas + robustez | RF-06 | ✅ Hecha (falta probar con 3 máquinas) |
 | 6 | README final, cuestionario, bitácora de IA | Entrega | ⏳ Pendiente |
 
-La **etapa 5** ya puede empezar: reutiliza el canal de voz de la etapa 4 (`VoiceChannel`, `AudioSender`, `AudioReceiver`).
+Falta la **etapa 6** (documentación) y probar las conferencias con 3 personas en máquinas distintas.
 
-Peso en la nota de lo que falta: conferencias de voz (el resto de los 1.2 de voz) + concurrencia/documentación/sustentación 0.6.
+Peso en la nota de lo que falta: concurrencia/documentación/sustentación 0.6.
 
 ## 3. Cómo ponerlo a andar
 
@@ -80,9 +80,15 @@ client/build/install/client/bin/client --Ice.Config=config/client.config
 - Lo ideal es probar en **dos máquinas** (`./gradlew runClient -Phost=<IP del servidor>`). Con los dos clientes en el mismo PC, Windows puede negarse a abrir el micrófono dos veces ("No se pudo abrir el micrófono").
 - Windows pregunta si se permite a Java usar la red: aceptar en **redes privadas**; si no, el audio UDP no llega. En macOS hay que dar permiso de micrófono a la terminal o al IDE.
 
+### Probar conferencias de voz
+
+- Tres clientes (idealmente en tres máquinas, con audífonos): `/create redes` en uno, `/join redes` en los otros dos, y `/voice` en los tres.
+- Probar `/mute` y `/unmute`, y `/leavevoice` desde uno: los otros dos deben seguir oyéndose. `/rooms` muestra `[voz activa]`.
+- En la máquina del **servidor**, el firewall debe permitir a Java recibir **UDP en el puerto 10001** (el relay).
+
 ### Comandos del cliente que ya existen
 
-`/login <nick>`, `/logout`, `/users`, `/msg <usuario> <texto>`, `/create <sala>`, `/rooms`, `/join <sala>`, `/leave <sala>`, `/members <sala>`, `/room <sala> [texto]`, `/sendfile <usuario|#sala> <ruta>`, `/call <usuario>`, `/accept`, `/reject`, `/hangup`, `/help`, `/quit`. El texto sin `/` se envía a la sala activa (la que muestra el prompt, ej. `ana #redes>`).
+`/login <nick>`, `/logout`, `/users`, `/msg <usuario> <texto>`, `/create <sala>`, `/rooms`, `/join <sala>`, `/leave <sala>`, `/members <sala>`, `/room <sala> [texto]`, `/sendfile <usuario|#sala> <ruta>`, `/call <usuario>`, `/accept`, `/reject`, `/hangup`, `/voice [sala]`, `/leavevoice`, `/mute`, `/unmute`, `/help`, `/quit`. El texto sin `/` se envía a la sala activa (la que muestra el prompt, ej. `ana #redes>`).
 
 ## 4. Arquitectura
 
@@ -99,7 +105,7 @@ client/build/install/client/bin/client --Ice.Config=config/client.config
         una sola conexión TCP por cliente; los callbacks viajan por esa misma conexión
 
   (Etapa 4, hecha)       audio UDP directo A ⇄ B en llamadas 1 a 1; Ice solo coordina la llamada
-  (Etapa 5, pendiente)   audio UDP A → relay del servidor → demás, en conferencias
+  (Etapa 5, hecha)       audio UDP A → relay del servidor (UDP 10001) → demás, en conferencias
 ```
 
 ### Decisiones ya tomadas (no cambiarlas sin hablarlo con el equipo)
@@ -137,11 +143,14 @@ Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferenci
 |---|---|
 | `ChatServer` | `main`: crea el communicator, el adaptador `ChatAdapter` y publica `ChatService` |
 | `ChatServiceI` | Servant de `ChatService`; delega el login en `ChatHub` |
-| `SessionI` | Servant de `Session`, uno por usuario. **Aquí están los métodos pendientes de la etapa 5** (lanzan `pending(...)`) |
-| `ChatHub` | Núcleo: login, `disconnect`, `notify` y `broadcast`. Expone `users()`, `rooms()` y `calls()` |
+| `SessionI` | Servant de `Session`, uno por usuario. Valida y delega en los gestores |
+| `ChatHub` | Núcleo: login, `disconnect`, `notify` y `broadcast`. Expone `users()`, `rooms()`, `calls()` y `conferences()` |
 | `UserRegistry` | Usuarios conectados (thread-safe) |
 | `RoomManager`, `Room` | Salas y sus miembros (thread-safe) |
 | `CallManager` | Llamadas 1 a 1: quién llama a quién (timbrando o activa) y avisos al otro lado. Thread-safe |
+| `ConferenceManager` | Conferencias: quién está en la voz de cada sala, avisos y tabla de rutas del relay. Usa el mismo lock que `CallManager` |
+| `AudioRelay` | Socket UDP (puerto 10001) y su hilo `audio-relay`: reenvía la voz de cada participante a los demás de su sala |
+| `AudioAddresses` | Direcciones UDP de audio deducidas de la conexión TCP (las usan llamadas y conferencias) |
 | `ClientSession` | Datos inmutables de un usuario: nickname, callback, conexión |
 | `Names`, `Log` | Validación de nombres y log por consola |
 
@@ -152,7 +161,7 @@ Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferenci
 | `ChatClient` | `main`: conecta, crea el adaptador de callbacks, arranca la CLI |
 | `CommandLoop` | Lee el teclado (hilo principal), despacha comandos y traduce excepciones a mensajes |
 | `ChatCommands` | Comandos de sesión, mensajes y salas. **Modelo a seguir para los comandos nuevos** |
-| `ClientCallbackI` | Servant de `ClientCallback`. Corre en hilos de Ice. Delega archivos en `FileAssembler` y llamadas en `CallSession`; los avisos de voz de la etapa 5 por ahora solo se imprimen |
+| `ClientCallbackI` | Servant de `ClientCallback`. Corre en hilos de Ice. Delega archivos en `FileAssembler`, llamadas en `CallSession` y conferencias en `ConferenceSession` |
 | `ClientContext` | Estado del cliente: proxies, sesión, nickname, sala activa. `onSessionEnd(...)` avisa cuando la sesión termina |
 | `Console` | Salida sincronizada: `event()` para lo que llega por callback, `echo()`/`info()`/`error()` para la CLI |
 | `FileCommands` | Comando `/sendfile`: valida ruta, tamaño y destino |
@@ -161,7 +170,10 @@ Los contratos **ya incluyen** las operaciones de archivos, llamadas y conferenci
 | `FileFormat` | Tamaños legibles y SHA-256 |
 | `CallCommands` | Comandos `/call`, `/accept`, `/reject`, `/hangup`: validan argumentos y delegan en `CallSession` |
 | `CallSession` | Estado de la llamada (IDLE, CALLING, INCOMING, ACTIVE). Los avisos de Ice se procesan en su hilo `call-events` |
-| `VoiceChannel` | Un socket UDP y sus dos hilos (`voice-sender`, `voice-receiver`). `close()` libera todo. **Reutilizable en la etapa 5** |
+| `VoiceChannel` | Un socket UDP y sus dos hilos (`voice-sender`, `voice-receiver`). `close()` libera todo. Sirve para llamadas 1 a 1 y, con mezclador, para conferencias |
+| `VoiceCommands` | Comandos `/voice`, `/leavevoice`, `/mute`, `/unmute` |
+| `ConferenceSession` | Estado de la conferencia del cliente (sala, canal de voz). Los avisos de Ice se procesan en su hilo `voice-events` |
+| `AudioMixer` | Separa por emisor lo que llega del relay y cada 20 ms reproduce la suma (hilo `voice-mixer`) |
 | `AudioSender`, `AudioReceiver` | Los hilos: micrófono → UDP y UDP → altavoz |
 | `AudioSpec` | Formato del audio: PCM 16 bits, mono, 16 kHz, paquetes de 20 ms (640 bytes) |
 | `AudioDevices`, `AudioSource`, `AudioSink` | Interfaces del micrófono y el altavoz, para poder probar sin hardware |
@@ -200,15 +212,21 @@ Limitaciones conocidas: "Archivo enviado" significa que el servidor recibió tod
 
 Limitaciones conocidas: no hay temporizador de timbre (si nadie responde, se cancela con `/hangup`); el receptor no filtra de quién viene el audio UDP; no hay cancelación de eco (usar audífonos); si ambos lados fallan al abrir el audio, un mensaje puede decir "canceló la llamada" en vez de "falló el audio" (solo cosmético).
 
-### Etapa 5 — Conferencias de voz y robustez (RF-06) · resto de 1.2 + 0.6 puntos
+### Etapa 5 — Conferencias de voz (RF-06) · ✅ Hecha
 
-- Servidor: clase `AudioRelay` con un `DatagramSocket` UDP que recibe el audio de cada participante y lo reenvía a los demás de la misma sala. **No devolverle a nadie su propio audio** (eco).
-- `SessionI.joinVoice(room, myAudio)` devuelve el endpoint UDP del relay; `leaveVoice(room)` saca al participante sin cortar a los demás. Notificar `voiceParticipantJoined` / `voiceParticipantLeft`.
-- `RoomInfo.voiceActive` hoy está fijo en `false` en `RoomManager.list()`: conectarlo al estado real.
-- Cliente: `/voice <sala>`, `/leavevoice`, `/mute`, `/unmute`. Reutilizar `VoiceChannel`, `AudioSender` y `AudioReceiver` de la etapa 4 (el "peer" ahora es el relay). Mute = dejar de enviar paquetes (agregar un indicador `muted` a `AudioSender`), sin cerrar la llamada. Una persona no puede estar en una llamada 1 a 1 y en una conferencia a la vez.
-- Limpieza en `ChatHub.disconnect` y al salir de la sala (`leaveRoom`).
-- Revisión final de concurrencia y manejo de errores en todo el servidor.
-- Probar con 3 o más participantes en máquinas distintas.
+`/voice [sala]`, `/leavevoice`, `/mute`, `/unmute`. Relay centralizado en el servidor; Ice solo hace la señalización. Decisiones tomadas:
+
+- **Relay (`AudioRelay`):** un `DatagramSocket` en el puerto UDP 10001 (`AudioRelay.Port` en `server.config`) y un único hilo `audio-relay`. Cada paquete se reenvía a los demás participantes de la sala, **nunca de vuelta a quien lo envió** (eco). Lo que llega de una dirección no registrada por Ice se descarta.
+- **Id del emisor:** el relay antepone 2 bytes (big-endian) con el id del participante. Todo llega al cliente desde la misma dirección (el relay) y sin ese id no podría separar las voces.
+- **Mezcla en el cliente (`AudioMixer`):** sin mezclar, con 3 o más personas llegarían N-1 flujos al altavoz, que se llenaría y descartaría paquetes. El mezclador guarda una cola corta por emisor (máx. 100 ms; se descarta lo más viejo) y cada 20 ms reproduce la suma, recortada a 16 bits. Escribe silencio si nadie habla, para mantener el colchón del altavoz.
+- **Estado (`ConferenceManager`):** quién está en la voz de cada sala. Usa el **mismo lock que `CallManager`**, así "llamada 1 a 1 o conferencia, nunca ambas" se comprueba de forma atómica. La tabla de rutas del relay es inmutable y se reemplaza entera (campo `volatile`) en cada cambio, así el hilo del relay la lee sin locks.
+- **Direcciones:** como en la etapa 4, el cliente declara solo el puerto y el servidor pone la IP que ve en la conexión TCP (`AudioAddresses`). El endpoint del relay que recibe el cliente es la IP del servidor a la que se conectó por TCP.
+- **Salir:** `/leavevoice` no corta a los demás. Al hacer `/leave` de la sala o al desconectarse, se sale también de la voz; quien deja la sala recibe su propio `voiceParticipantLeft` para que su cliente cierre el audio. `RoomInfo.voiceActive` refleja si hay conferencia.
+- **Mute:** `AudioSender` sigue leyendo el micrófono (para no acumular audio viejo) pero no envía. Funciona también en llamadas 1 a 1.
+
+Probado sin hardware (programa de prueba con 5 usuarios y sockets UDP propios): avisos de entrada y salida, reenvío a los demás sin eco, id distinto por emisor, descarte de paquetes ajenos, exclusión con llamadas 1 a 1, salida por `/leavevoice`, `/leave` y desconexión, `voiceActive`, y mezcla y recorte del `AudioMixer`.
+
+Limitaciones conocidas: sin cancelación de eco (usar audífonos); no hay comando para ver quién está en la voz de una sala (solo los avisos y `[voz activa]` en `/rooms`); detrás de NAT el relay no funcionaría (en el laboratorio todos están en la misma red).
 
 ### Etapa 6 — Documentación y entrega
 
@@ -295,7 +313,7 @@ Implementar una operación pendiente del servidor:
 | 1 y 2 | Jacanotorres (hechas) |
 | 3 — Archivos | JUANFIX1 (hecha) |
 | 4 — Llamadas 1 a 1 | JUANFIX1 (hecha) |
-| 5 — Conferencias y robustez | *por asignar* |
+| 5 — Conferencias y robustez | Elias Saldarriaga (hecha) |
 | 6 — Documentación | Todos |
 
 Mantener este archivo al día: al terminar una etapa, actualizar las secciones 2, 5 y 6.

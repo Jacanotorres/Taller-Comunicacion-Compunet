@@ -18,8 +18,8 @@ import com.zeroc.Ice.ObjectAdapter;
  * Núcleo del servidor: estado compartido (usuarios y salas), ciclo de vida de
  * las sesiones y envío de notificaciones a los clientes.
  *
- * No tiene estado propio mutable; delega en UserRegistry y RoomManager, que son
- * thread-safe.
+ * No tiene estado propio mutable; delega en UserRegistry, RoomManager, CallManager
+ * y ConferenceManager, que son thread-safe.
  */
 public class ChatHub {
 
@@ -29,9 +29,11 @@ public class ChatHub {
     private final UserRegistry users = new UserRegistry();
     private final RoomManager rooms = new RoomManager();
     private final CallManager calls = new CallManager(this);
+    private final ConferenceManager conferences;
 
-    public ChatHub(ObjectAdapter adapter) {
+    public ChatHub(ObjectAdapter adapter, AudioRelay relay) {
         this.adapter = adapter;
+        this.conferences = new ConferenceManager(this, relay, calls);
     }
 
     public UserRegistry users() {
@@ -44,6 +46,10 @@ public class ChatHub {
     
     public CallManager calls() {
         return calls;
+    }
+
+    public ConferenceManager conferences() {
+        return conferences;
     }
 
 
@@ -91,6 +97,7 @@ public class ChatHub {
             // el adaptador ya se destruyó (servidor apagándose) o el servant ya no estaba
         }
 
+        conferences.onDisconnect(session); // antes que las salas: los avisos van a sus miembros
         for (Room room : rooms.removeFromAll(session)) {
             broadcast(room.members(), session, cb -> cb.roomMemberLeftAsync(room.name(), session.nickname()));
         }

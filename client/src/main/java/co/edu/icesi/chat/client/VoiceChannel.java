@@ -16,6 +16,9 @@ import java.util.function.Consumer;
  * que anunciarlo al servidor ANTES de saber si la llamada será aceptada. El micrófono y el
  * altavoz solo se abren en {@link #start}, cuando de verdad empieza el audio.
  *
+ * Sirve para las llamadas 1 a 1 (el "peer" es el otro cliente) y para las conferencias (el "peer"
+ * es el relay del servidor y lo recibido pasa por un {@link AudioMixer} antes del altavoz).
+ *
  * {@link #close} es idempotente y libera todo: hilos, socket, micrófono y altavoz.
  */
 final class VoiceChannel implements AutoCloseable {
@@ -26,6 +29,7 @@ final class VoiceChannel implements AutoCloseable {
     private final Consumer<String> errors;
 
     private boolean closed;
+    private boolean muted;
     private AudioSender sender;
     private AudioReceiver receiver;
     private Thread senderThread;
@@ -44,7 +48,15 @@ final class VoiceChannel implements AutoCloseable {
     }
 
     /** Abre micrófono y altavoz y empieza a enviar y recibir audio con {@code peer}. */
-    synchronized void start(InetSocketAddress peer, AudioDevices devices) throws IOException {
+    void start(InetSocketAddress peer, AudioDevices devices) throws IOException {
+        start(peer, devices, false);
+    }
+
+    /**
+     * Como {@link #start(InetSocketAddress, AudioDevices)}; con {@code mixed} el audio recibido
+     * viene del relay de una conferencia (varias voces con el id del emisor) y se mezcla.
+     */
+    synchronized void start(InetSocketAddress peer, AudioDevices devices, boolean mixed) throws IOException {
         if (closed) {
             throw new IOException("El canal de voz ya está cerrado.");
         }
@@ -60,14 +72,23 @@ final class VoiceChannel implements AutoCloseable {
             throw e;
         }
         source = in;
-        sink = out;
+        sink = mixed ? new AudioMixer(out) : out;
 
         sender = new AudioSender(socket, peer, in, errors);
-        receiver = new AudioReceiver(socket, out, errors);
+        sender.setMuted(muted);
+        receiver = new AudioReceiver(socket, sink, errors);
         senderThread = daemon(sender, "voice-sender");
         receiverThread = daemon(receiver, "voice-receiver");
         receiverThread.start();
         senderThread.start();
+    }
+
+    /** Silencia o reactiva el micrófono sin cerrar la llamada. */
+    synchronized void setMuted(boolean muted) {
+        this.muted = muted;
+        if (sender != null) {
+            sender.setMuted(muted);
+        }
     }
 
     @Override

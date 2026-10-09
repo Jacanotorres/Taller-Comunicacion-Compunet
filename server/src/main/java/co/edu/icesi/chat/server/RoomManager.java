@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Predicate;
 
 import co.edu.icesi.chat.InvalidNameException;
 import co.edu.icesi.chat.NotRoomMemberException;
@@ -105,10 +106,11 @@ public class RoomManager {
         return left;
     }
 
-    public RoomInfo[] list() {
+    /** @param voiceActive indica si la sala tiene una conferencia de voz en curso */
+    public RoomInfo[] list(Predicate<Room> voiceActive) {
         return rooms.values().stream()
                 .sorted(Comparator.comparing(Room::name, String.CASE_INSENSITIVE_ORDER))
-                .map(r -> new RoomInfo(r.name(), r.owner(), r.size(), false))
+                .map(r -> new RoomInfo(r.name(), r.owner(), r.size(), voiceActive.test(r)))
                 .toArray(RoomInfo[]::new);
     }
 }

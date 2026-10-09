@@ -60,6 +60,13 @@ En Windows se usa `gradlew.bat` en lugar de `./gradlew`.
 | `/members <sala>` | Lista los miembros de una sala |
 | `/room <sala> [texto]` | Envía un mensaje a esa sala; sin texto, la deja como sala activa |
 | *texto sin `/`* | Se envía a la sala activa (la que muestra el prompt) |
+| `/sendfile <usuario\|#sala> <ruta>` | Envía un archivo (se guarda en `downloads/` del receptor) |
+| `/call <usuario>` | Llamada de voz 1 a 1 |
+| `/accept`, `/reject` | Acepta o rechaza la llamada entrante |
+| `/hangup` | Cuelga (o cancela la llamada que está timbrando) |
+| `/voice [sala]` | Entra a la llamada de voz de una sala (por defecto, la activa) |
+| `/leavevoice` | Sale de la llamada de voz sin cortar a los demás |
+| `/mute`, `/unmute` | Silencia o reactiva el micrófono (en conferencia o en llamada 1 a 1) |
 | `/help`, `/quit` | Ayuda y salir |
 
 ## Estructura del proyecto
@@ -87,7 +94,7 @@ En Windows se usa `gradlew.bat` en lugar de `./gradlew`.
 - **Concurrencia en el servidor:** el estado compartido vive en `ConcurrentHashMap`. La unicidad del nickname se resuelve con `putIfAbsent` (atómico) y las altas y bajas de una sala con `computeIfPresent`, que bloquea solo esa sala. Las notificaciones a clientes se envían con invocaciones asíncronas (`...Async`), para que un cliente lento no frene a los demás.
 - **Detección de clientes caídos:** el cliente envía latidos (ACM heartbeats); si el servidor deja de recibir actividad durante 15 s cierra la conexión, y el *close callback* de esa conexión limpia la sesión y avisa a los demás usuarios.
 - **Salas:** una sala se elimina cuando queda sin miembros. Los nombres de usuarios y salas no distinguen mayúsculas.
-- **Conferencias de voz:** relay centralizado en el servidor (SFU ligero).
+- **Conferencias de voz:** relay centralizado en el servidor (SFU ligero), en el puerto UDP 10001 (`AudioRelay.Port` en `server.config`). Reenvía la voz de cada participante a los demás de la sala, nunca a quien la envió, anteponiendo el id del emisor (2 bytes); cada cliente mezcla las voces que recibe (`AudioMixer`).
 - **Plugin de Ice con Gradle 9:** el taller exige `com.zeroc.gradle.ice-builder.slice` (1.5.2), compilado contra Groovy 3. Gradle 9, necesario para compilar con JDK 25, trae Groovy 4, que movió `groovy.util.XmlSlurper` a `groovy.xml.XmlSlurper`. `buildSrc/` contiene una clase puente de pocas líneas que restaura ese nombre para que el plugin funcione.
 
 ## Estado del desarrollo
@@ -96,7 +103,7 @@ En Windows se usa `gradlew.bat` en lugar de `./gradlew`.
 |---|---|---|
 | 1 | Proyecto Gradle, contratos Slice, arranque de servidor y cliente con CLI | ✅ |
 | 2 | Sesión, presencia, chat privado y salas (RF-01, RF-02, RF-03) | ✅ |
-| 3 | Transferencia de archivos por chunks (RF-04) | ⏳ |
-| 4 | Llamadas de voz 1 a 1 por UDP (RF-05) | ⏳ |
-| 5 | Conferencias de voz y robustez (RF-06) | ⏳ |
+| 3 | Transferencia de archivos por chunks (RF-04) | ✅ |
+| 4 | Llamadas de voz 1 a 1 por UDP (RF-05) | ✅ |
+| 5 | Conferencias de voz y robustez (RF-06) | ✅ |
 | 6 | Documentación final, cuestionario y bitácora IAG | ⏳ |

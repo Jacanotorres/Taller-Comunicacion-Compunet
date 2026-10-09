@@ -17,11 +17,13 @@ public class ClientCallbackI implements ClientCallback {
     private final Console console;
     private final FileAssembler files;
     private final CallSession calls;
+    private final ConferenceSession conference;
 
-    public ClientCallbackI(Console console, FileAssembler files, CallSession calls) {
+    public ClientCallbackI(Console console, FileAssembler files, CallSession calls, ConferenceSession conference) {
         this.console = console;
         this.files = files;
         this.calls = calls;
+        this.conference = conference;
     }
 
     // --- Presencia ---
@@ -93,11 +95,12 @@ public class ClientCallbackI implements ClientCallback {
 
     @Override
     public void voiceParticipantJoined(String room, String nickname, Current current) {
-        console.event(Console.yellow("[#" + room + "] " + nickname + " entró a la llamada de voz"));
+        // Solo encola: ConferenceSession procesa el aviso en su propio hilo.
+        conference.onParticipantJoined(room, nickname);
     }
 
     @Override
     public void voiceParticipantLeft(String room, String nickname, Current current) {
-        console.event(Console.yellow("[#" + room + "] " + nickname + " salió de la llamada de voz"));
+        conference.onParticipantLeft(room, nickname);
     }
 }

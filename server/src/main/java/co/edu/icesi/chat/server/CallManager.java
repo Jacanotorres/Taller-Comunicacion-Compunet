@@ -6,9 +6,6 @@ import java.util.Map;
 import co.edu.icesi.chat.AudioEndpoint;
 import co.edu.icesi.chat.CallException;
 import co.edu.icesi.chat.UserNotFoundException;
-import com.zeroc.Ice.ConnectionInfo;
-import com.zeroc.Ice.IPConnectionInfo;
-import com.zeroc.Ice.LocalException;
 
 /**
  * Señalización de las llamadas de voz 1 a 1 (RF-05).
@@ -22,6 +19,8 @@ import com.zeroc.Ice.LocalException;
  * Concurrencia: todo el estado vive en un mapa protegido con un solo lock (synchronized). Las
  * secciones críticas son de pocas líneas y no hacen E/S, así que la contención es mínima. Las
  * notificaciones a los clientes se envían SIEMPRE fuera del lock, y de forma asíncrona.
+ * ConferenceManager usa este mismo lock, para que nadie quede en una llamada 1 a 1 y en una
+ * conferencia a la vez.
  */
 public class CallManager {
 
@@ -61,7 +60,7 @@ public class CallManager {
         if (target == me) {
             throw new CallException("No puedes llamarte a ti mismo.");
         }
-        AudioEndpoint audio = observed(me, myAudio);
+        AudioEndpoint audio = AudioAddresses.observed(me, myAudio);
 
         register(me, target); // atómico: falla si alguno de los dos ya está en una llamada
 
@@ -80,7 +79,7 @@ public class CallManager {
     public void answer(ClientSession me, String caller, boolean accept, AudioEndpoint myAudio)
             throws CallException {
         if (accept) {
-            AudioEndpoint audio = observed(me, myAudio);
+            AudioEndpoint audio = AudioAddresses.observed(me, myAudio);
             Call call = activate(me, caller);
             hub.notify(call.caller(), cb -> cb.callAcceptedAsync(me.nickname(), audio));
             Log.info("CALL   " + me.nickname() + " aceptó la llamada de " + call.caller().nickname());
@@ -110,6 +109,11 @@ public class CallManager {
         }
     }
 
+    /** El usuario está en una llamada (timbrando o activa). */
+    public synchronized boolean isBusy(ClientSession user) {
+        return byUser.containsKey(user);
+    }
+
     // ------------------------------------------------------------------
     // Estado (todas con el lock tomado)
     // ------------------------------------------------------------------
@@ -120,6 +124,13 @@ public class CallManager {
         }
         if (byUser.containsKey(callee)) {
             throw new CallException("'" + callee.nickname() + "' está ocupado en otra llamada.");
+        }
+        // Reentrante: ConferenceManager usa este mismo monitor, así la comprobación es atómica.
+        if (hub.conferences().isParticipant(caller)) {
+            throw new CallException("Estás en la llamada de voz de una sala. Usa /leavevoice primero.");
+        }
+        if (hub.conferences().isParticipant(callee)) {
+            throw new CallException("'" + callee.nickname() + "' está en la llamada de voz de una sala.");
         }
         Entry entry = new Entry(new Call(caller, callee));
         byUser.put(caller, entry);
@@ -161,37 +172,5 @@ public class CallManager {
     private void remove(Entry entry) {
         byUser.remove(entry.call.caller(), entry);
         byUser.remove(entry.call.callee(), entry);
-    }
-
-
-    // Dirección UDP de cada participante
-   
-
-    /**
-     * Valida el puerto que declara el cliente y completa el host con la dirección que el
-     * servidor ve en su conexión TCP. El cliente suele no conocer bien su propia IP (varias
-     * tarjetas, VPN), y no se confía en el host que declare: así nadie puede pedir que el audio
-     * de otro usuario se envíe a una máquina ajena.
-     */
-    private static AudioEndpoint observed(ClientSession me, AudioEndpoint requested) throws CallException {
-        if (requested == null || requested.port < 1 || requested.port > 65535) {
-            throw new CallException("El puerto UDP de audio no es válido.");
-        }
-        return new AudioEndpoint(remoteHost(me), requested.port);
-    }
-
-    private static String remoteHost(ClientSession me) throws CallException {
-        try {
-            ConnectionInfo info = me.connection().getInfo();
-            while (info != null) {
-                if (info instanceof IPConnectionInfo ip) {
-                    return ip.remoteAddress;
-                }
-                info = info.underlying;
-            }
-        } catch (LocalException e) {
-            // la conexión ya se cerró
-        }
-        throw new CallException("No se pudo determinar tu dirección de red.");
     }
 }

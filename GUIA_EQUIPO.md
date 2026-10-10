@@ -6,7 +6,7 @@ Explica qué está hecho, cómo funciona, qué falta y las reglas para seguir tr
 > **Si eres un asistente de IA:** lee este archivo completo antes de proponer o escribir código,
 > y respeta la sección [Instrucciones para asistentes de IA](#9-instrucciones-para-asistentes-de-ia).
 
-Última actualización: 2026-10-09 · Estado: **Etapas 1 a 5 terminadas** (de 6).
+Última actualización: 2026-10-09 · Estado: **Etapas 1 a 5 terminadas; etapa 6 casi lista** (de 6).
 
 ---
 
@@ -37,9 +37,9 @@ Taller Evaluativo Unidad 2 de Computación en Internet I (Icesi, 2026-2): una pl
 | 3 | Transferencia de archivos por chunks | RF-04 | ✅ Hecha |
 | 4 | Llamadas de voz 1 a 1 por UDP | RF-05 | ✅ Hecha |
 | 5 | Conferencias de voz en salas + robustez | RF-06 | ✅ Hecha (falta probar con 3 máquinas) |
-| 6 | README final, cuestionario, bitácora de IA | Entrega | ⏳ Pendiente |
+| 6 | README final, cuestionario, bitácora de IA | Entrega | 🟡 Casi lista (ver sección 6) |
 
-Falta la **etapa 6** (documentación) y probar las conferencias con 3 personas en máquinas distintas.
+Falta: completar la etapa 6 (códigos de integrantes y secciones *(completar)* de `BITACORA_IA.md`) y probar las conferencias con 3 personas en máquinas distintas.
 
 Peso en la nota de lo que falta: concurrencia/documentación/sustentación 0.6.
 
@@ -228,12 +228,17 @@ Probado sin hardware (programa de prueba con 5 usuarios y sockets UDP propios): 
 
 Limitaciones conocidas: sin cancelación de eco (usar audífonos); no hay comando para ver quién está en la voz de una sala (solo los avisos y `[voz activa]` en `/rooms`); detrás de NAT el relay no funcionaría (en el laboratorio todos están en la misma red).
 
-### Etapa 6 — Documentación y entrega
+### Etapa 6 — Documentación y entrega · 🟡 Casi lista
 
-- `README.md`: diagrama de arquitectura con el flujo Ice y el flujo UDP, manual de usuario completo, respuestas a las 4 preguntas del cuestionario (sección 4 del enunciado).
-- `BITACORA_IA.md`: prompts principales, código generado que se adaptó, lecciones de depuración.
-- Completar la tabla de integrantes del README.
+Hecho:
+- `README.md`: diagramas Mermaid (flujo Ice y flujo UDP, secuencia de una llamada), manual de usuario con paso a paso y problemas frecuentes, y las 4 respuestas del cuestionario (sección 4 del enunciado). La pregunta 2 se respondió con un experimento real contra el servidor.
+- `BITACORA_IA.md`: estructura completa; etapas 5 y 6 documentadas.
+
+Pendiente (cada integrante):
+- Completar los códigos de la tabla de integrantes del README.
+- Llenar en `BITACORA_IA.md` las secciones marcadas *(completar: ...)*: prompts y revisión de su etapa, y el resultado de la prueba de audio con 3 personas.
 - Verificar: repositorio privado y profesor con acceso de lectura.
+- Repasar las respuestas del cuestionario: en la sustentación cada integrante debe poder explicarlas.
 
 ## 7. Problemas ya resueltos (para no repetirlos)
 
@@ -261,7 +266,7 @@ Limitaciones conocidas: sin cancelación de eco (usar audífonos); no hay comand
 
 **Bitácora de IA (obligatoria, Nivel 3 del curso)**
 - Cada integrante anota mientras trabaja: el prompt principal, qué código generó la IA, qué se cambió y por qué, y qué error costó depurar.
-- Todavía no existe `BITACORA_IA.md`; quien empiece la Etapa 3 puede crearla. Las etapas 1 y 2 se hicieron con Claude Code y la sección 7 de esta guía resume sus lecciones de depuración.
+- La bitácora está en `BITACORA_IA.md`, con una sección por etapa. Cada quien llena la suya (las partes marcadas *(completar)*).
 - En la sustentación **cada integrante debe poder explicar el código**, incluido el que generó una IA.
 
 ## 9. Instrucciones para asistentes de IA

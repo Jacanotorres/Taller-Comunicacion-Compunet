@@ -159,6 +159,19 @@ public class CallSession {
         console.info("Llamada con " + other + " terminada.");
     }
 
+    /**
+     * Silencia o reactiva el micrófono en la llamada en curso.
+     *
+     * @return false si no hay una llamada activa
+     */
+    public synchronized boolean setMuted(boolean muted) {
+        if (state != State.ACTIVE) {
+            return false;
+        }
+        channel.setMuted(muted);
+        return true;
+    }
+
     // ------------------------------------------------------------------
     // Avisos del servidor (llegan por ClientCallbackI, en hilos de Ice)
     // ------------------------------------------------------------------

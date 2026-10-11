@@ -20,7 +20,7 @@ import com.zeroc.Ice.Current;
  * conectado, así que cada operación ya sabe quién la invoca.
  *
  * No guarda estado mutable: todo el estado compartido vive en ChatHub
- * (UserRegistry y RoomManager), que es thread-safe.
+ * (UserRegistry, RoomManager, CallManager y ConferenceManager), que es thread-safe.
  */
 public class SessionI implements Session {
 
@@ -74,7 +74,7 @@ public class SessionI implements Session {
 
     @Override
     public RoomInfo[] listRooms(Current current) {
-        return hub.rooms().list();
+        return hub.rooms().list(hub.conferences()::isActive);
     }
 
     @Override
@@ -100,6 +100,7 @@ public class SessionI implements Session {
     public void leaveRoom(String name, Current current)
             throws RoomNotFoundException, NotRoomMemberException {
         Room room = hub.rooms().leave(name, me);
+        hub.conferences().onLeaveRoom(me, room); // si estaba en la voz de la sala, sale también
         hub.broadcast(room.members(), me, cb -> cb.roomMemberLeftAsync(room.name(), me.nickname()));
         Log.info("ROOM   " + me.nickname() + " salió de #" + room.name());
     }
@@ -197,15 +198,11 @@ public class SessionI implements Session {
     @Override
     public AudioEndpoint joinVoice(String room, AudioEndpoint myAudio, Current current)
             throws RoomNotFoundException, NotRoomMemberException, CallException {
-        throw pending("joinVoice", 5);
+        return hub.conferences().join(me, room, myAudio);
     }
 
     @Override
     public void leaveVoice(String room, Current current) throws RoomNotFoundException, CallException {
-        throw pending("leaveVoice", 5);
-    }
-
-    private static UnsupportedOperationException pending(String operation, int stage) {
-        return new UnsupportedOperationException(operation + " pendiente de implementar (Etapa " + stage + ")");
+        hub.conferences().leave(me, room);
     }
 }

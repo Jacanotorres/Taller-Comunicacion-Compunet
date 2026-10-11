@@ -11,6 +11,9 @@ import java.util.function.Consumer;
  *
  * El propio micrófono marca el ritmo: {@link AudioSource#read} bloquea hasta tener un paquete
  * completo, así que no hace falta ningún temporizador.
+ *
+ * Silenciado (mute): se sigue leyendo el micrófono, para que no se acumule audio viejo que saldría
+ * de golpe al reactivarlo, pero no se envía nada. La llamada sigue abierta.
  */
 final class AudioSender implements Runnable {
 
@@ -19,6 +22,7 @@ final class AudioSender implements Runnable {
     private final AudioSource source;
     private final Consumer<String> errors;
     private volatile boolean running = true;
+    private volatile boolean muted;
 
     AudioSender(DatagramSocket socket, SocketAddress destination, AudioSource source, Consumer<String> errors) {
         this.socket = socket;
@@ -35,6 +39,9 @@ final class AudioSender implements Runnable {
                 if (!source.read(frame)) {
                     break;
                 }
+                if (muted) {
+                    continue;
+                }
                 // send copia los datos al enviar, así que se puede reutilizar el mismo arreglo
                 socket.send(new DatagramPacket(frame, frame.length, destination));
             } catch (IOException | RuntimeException e) {
@@ -44,6 +51,10 @@ final class AudioSender implements Runnable {
                 break;
             }
         }
+    }
+
+    void setMuted(boolean muted) {
+        this.muted = muted;
     }
 
     void stop() {
